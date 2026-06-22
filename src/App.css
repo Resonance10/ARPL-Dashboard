@@ -451,7 +451,7 @@ textarea {
   cursor: pointer;
   font-size: 0.8rem;
   font-weight: 600;
-  padding: 4px 8px;
+  padding: 8px 12px;
   border-radius: 6px;
   transition: background 0.15s;
 }
@@ -1035,7 +1035,7 @@ textarea {
   height: 16px;
   background: var(--rose-text);
   color: #fff;
-  font-size: var(--fs-xs);
+  font-size: 0.85rem;
   font-weight: 700;
   border-radius: 50%;
   display: flex;
@@ -1712,10 +1712,10 @@ textarea {
 
 .filter-card .filter-body select,
 .filter-card .filter-body input {
-  font-size: var(--fs-xs);
-  padding: 4px 8px;
+  font-size: 0.85rem;
+  padding: 8px 12px;
   border-radius: var(--radius-sm);
-  min-height: 28px;
+  min-height: 36px;
 }
 
 .section-heading {
@@ -2775,7 +2775,7 @@ textarea {
   text-overflow: ellipsis;
 }
 .cell-subtitle {
-  font-size: var(--fs-xs);
+  font-size: 0.85rem;
   color: var(--text-sub);
 }
 .form-actions-row {
