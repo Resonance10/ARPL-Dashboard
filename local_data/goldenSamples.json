@@ -1,0 +1,51 @@
+[
+  {
+    "id": 1781495306724,
+    "motorCode": "P1",
+    "motorModel": "M1",
+    "nominalVoltage": 51,
+    "peakPower": 6.4,
+    "peakTorque": 45.6,
+    "peakCurrentAC": 240,
+    "maxSpeed": 7200,
+    "bemfAt3000": 28.5,
+    "resistance": 10,
+    "hipotLimit": 3.5,
+    "irLimit": 15.3,
+    "encoder": {
+      "sineMin": 1150,
+      "sineMax": 2900,
+      "cosMin": 1150,
+      "cosMax": 2900,
+      "sinePP": 1750,
+      "cosPP": 1750,
+      "offset": 766
+    },
+    "performanceCurves": [
+      {
+        "rpm": 500,
+        "torque": 10,
+        "power": 10,
+        "efficiency": 10
+      },
+      {
+        "rpm": 1,
+        "torque": 10,
+        "power": 10,
+        "efficiency": 10
+      },
+      {
+        "rpm": 10,
+        "torque": 10,
+        "power": 10,
+        "efficiency": 10
+      },
+      {
+        "rpm": 1,
+        "torque": 10,
+        "power": 10,
+        "efficiency": 10
+      }
+    ]
+  }
+]

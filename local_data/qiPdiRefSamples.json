@@ -1,0 +1,268 @@
+[
+  {
+    "id": 1781678146124,
+    "motorCode": "P1",
+    "motorModel": "M1",
+    "checklist": [
+      {
+        "no": 1,
+        "desc": "Spigot Seat",
+        "spec": "154,90 (0,00/-0,03) mm",
+        "method": "OD Snap gauge"
+      },
+      {
+        "no": 2,
+        "desc": "Front Mounting Thread",
+        "spec": "3x M6x1 - 6H, l 18,00 mm",
+        "method": "Plug gauge check found OK"
+      },
+      {
+        "no": 3,
+        "desc": "Shaft OD Total Runout Wrt Datum B",
+        "spec": "0,1 mm",
+        "method": "Total Indicator Reading"
+      },
+      {
+        "no": 4,
+        "desc": "Shaft Front Face to Front Mount Spigot Seating Distance",
+        "spec": "28,20 ± 0,50 mm",
+        "method": "Height Gauge"
+      },
+      {
+        "no": 5,
+        "desc": "Shaft Spline",
+        "spec": "As per Drawing",
+        "method": "Master Spline"
+      },
+      {
+        "no": 6,
+        "desc": "Dry Leak Test",
+        "spec": "at Min. 0,2 bar",
+        "method": "Pressurised air and foam water"
+      },
+      {
+        "no": 7,
+        "desc": "Thermister Fuction",
+        "spec": "Resistance at room temperature",
+        "method": "Resistance meter"
+      },
+      {
+        "no": 8,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 1 - Red (Vdd (+5V))",
+        "method": "Visual"
+      },
+      {
+        "no": 9,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 2 - White (PT 1000 +ve)",
+        "method": "Visual"
+      },
+      {
+        "no": 10,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 3 - Yellow (Sin output)",
+        "method": "Visual"
+      },
+      {
+        "no": 11,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 4 - Blue (Cos output)",
+        "method": "Visual"
+      },
+      {
+        "no": 12,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 5 - Black (Common GND)",
+        "method": "Visual"
+      },
+      {
+        "no": 13,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 6 - Green (Shield + Wire)",
+        "method": "Visual"
+      },
+      {
+        "no": 14,
+        "desc": "Motor Length",
+        "spec": "177,8 (+/- 1,5)",
+        "method": "Height Gauge"
+      },
+      {
+        "no": 15,
+        "desc": "Motor Weight",
+        "spec": "14,7 (+/- 0,15)",
+        "method": "Weight Scale"
+      },
+      {
+        "no": 16,
+        "desc": "Phase Cable Grommet",
+        "spec": "Manual Assembly",
+        "method": "Visual"
+      },
+      {
+        "no": 17,
+        "desc": "Terminal Cover",
+        "spec": "Manual Assembly",
+        "method": "Visual"
+      },
+      {
+        "no": 18,
+        "desc": "Terminal Cover Assembly Bolts",
+        "spec": "Manual Assembly",
+        "method": "Visual"
+      },
+      {
+        "no": 19,
+        "desc": "Phase Cable Assembly Bolts",
+        "spec": "Manual Assembly",
+        "method": "Visual"
+      },
+      {
+        "no": 20,
+        "desc": "Visual Defects",
+        "spec": "Free From Rust, Dust, Physical Damage",
+        "method": "Visual"
+      },
+      {
+        "no": 21,
+        "desc": "Deviations if any",
+        "spec": "Connector Push mount not provided, push mount cable tie provided as alternative",
+        "method": "—"
+      }
+    ]
+  },
+  {
+    "id": 1781678155796,
+    "motorCode": "P2",
+    "motorModel": "M2",
+    "checklist": [
+      {
+        "no": 1,
+        "desc": "Spigot Seat",
+        "spec": "154,90 (0,00/-0,03) mm",
+        "method": "OD Snap gauge"
+      },
+      {
+        "no": 2,
+        "desc": "Front Mounting Thread",
+        "spec": "3x M6x1 - 6H, l 18,00 mm",
+        "method": "Plug gauge check found OK"
+      },
+      {
+        "no": 3,
+        "desc": "Shaft OD Total Runout Wrt Datum B",
+        "spec": "0,1 mm",
+        "method": "Total Indicator Reading"
+      },
+      {
+        "no": 4,
+        "desc": "Shaft Front Face to Front Mount Spigot Seating Distance",
+        "spec": "28,20 ± 0,50 mm",
+        "method": "Height Gauge"
+      },
+      {
+        "no": 5,
+        "desc": "Shaft Spline",
+        "spec": "As per Drawing",
+        "method": "Master Spline"
+      },
+      {
+        "no": 6,
+        "desc": "Dry Leak Test",
+        "spec": "at Min. 0,2 bar",
+        "method": "Pressurised air and foam water"
+      },
+      {
+        "no": 7,
+        "desc": "Thermister Fuction",
+        "spec": "Resistance at room temperature",
+        "method": "Resistance meter"
+      },
+      {
+        "no": 8,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 1 - Red (Vdd (+5V))",
+        "method": "Visual"
+      },
+      {
+        "no": 9,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 2 - White (PT 1000 +ve)",
+        "method": "Visual"
+      },
+      {
+        "no": 10,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 3 - Yellow (Sin output)",
+        "method": "Visual"
+      },
+      {
+        "no": 11,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 4 - Blue (Cos output)",
+        "method": "Visual"
+      },
+      {
+        "no": 12,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 5 - Black (Common GND)",
+        "method": "Visual"
+      },
+      {
+        "no": 13,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 6 - Green (Shield + Wire)",
+        "method": "Visual"
+      },
+      {
+        "no": 14,
+        "desc": "Motor Length",
+        "spec": "177,8 (+/- 1,5)",
+        "method": "Height Gauge"
+      },
+      {
+        "no": 15,
+        "desc": "Motor Weight",
+        "spec": "15.2 (+/- 0,15)",
+        "method": "Weight Scale"
+      },
+      {
+        "no": 16,
+        "desc": "Phase Cable Grommet",
+        "spec": "Manual Assembly",
+        "method": "Visual"
+      },
+      {
+        "no": 17,
+        "desc": "Terminal Cover",
+        "spec": "Manual Assembly",
+        "method": "Visual"
+      },
+      {
+        "no": 18,
+        "desc": "Terminal Cover Assembly Bolts",
+        "spec": "Manual Assembly",
+        "method": "Visual"
+      },
+      {
+        "no": 19,
+        "desc": "Phase Cable Assembly Bolts",
+        "spec": "Manual Assembly",
+        "method": "Visual"
+      },
+      {
+        "no": 20,
+        "desc": "Visual Defects",
+        "spec": "Free From Rust, Dust, Physical Damage",
+        "method": "Visual"
+      },
+      {
+        "no": 21,
+        "desc": "Deviations if any",
+        "spec": "Connector Push mount not provided, push mount cable tie provided as alternative",
+        "method": "—"
+      }
+    ]
+  }
+]
