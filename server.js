@@ -65,9 +65,7 @@ const DEFAULT_MAIN = {
     subscriptions: {},
     permissions: {},
     notifications: [],
-    stats: {},
-    goldenSamples: [],
-    qiPdiRefSamples: []
+    stats: {}
 };
 
 if (!fs.existsSync(MAIN_DATA_FILE)) {
@@ -112,31 +110,6 @@ const migrateFromDbJson = () => {
 };
 
 migrateFromDbJson();
-
-// Migrate golden samples and QI refs from separate files into main.json
-const migrateEolData = () => {
-    try {
-        const current = readJson(MAIN_DATA_FILE);
-        const goldenMigrated = current.goldenSamples && current.goldenSamples.length > 0;
-        const refMigrated = current.qiPdiRefSamples && current.qiPdiRefSamples.length > 0;
-        if (!goldenMigrated && fs.existsSync(GOLDEN_FILE)) {
-            const legacyGolden = readJson(GOLDEN_FILE);
-            if (Array.isArray(legacyGolden) && legacyGolden.length > 0) {
-                current.goldenSamples = legacyGolden;
-            }
-        }
-        if (!refMigrated && fs.existsSync(QI_REF_FILE)) {
-            const legacyRefs = readJson(QI_REF_FILE);
-            if (Array.isArray(legacyRefs) && legacyRefs.length > 0) {
-                current.qiPdiRefSamples = legacyRefs;
-            }
-        }
-        writeJson(MAIN_DATA_FILE, current);
-    } catch (e) {
-        console.warn('Could not migrate EOL data:', e.message);
-    }
-};
-migrateEolData();
 
 // Serve uploaded files from legacy and new directories
 const LEGACY_UPLOADS = path.join(__dirname, 'uploads');

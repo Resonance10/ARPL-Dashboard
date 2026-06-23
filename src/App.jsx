@@ -13,7 +13,7 @@ import { formatDate } from './utils/formatDate'
 import { CURRENCY_DATA } from './utils/currency'
 import { generateRefId } from './utils/refId'
 import { getReassignedInfo } from './utils/reassignment'
-import { StatusStepper, Toast } from './components/ui'
+import { StatusStepper, Toast, FilterSection, FilterInput, FilterSelect } from './components/ui'
 import ThemeConfigurator, { ThemeToggleButton } from './components/ThemeConfigurator'
 
 const FEATURE_LABELS = {
@@ -256,6 +256,17 @@ function App() {
     pollingContextRef.current = { currentPage, activeProgramTab };
   }, [currentPage, activeProgramTab]);
 
+  // Global Escape-to-close for modals
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key !== 'Escape') return;
+      if (previewFile) setPreviewFile(null);
+      if (showProfileModal) setShowProfileModal(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewFile, showProfileModal]);
+
   // Custom Toast State
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -328,12 +339,34 @@ function App() {
   // Check for existing session on load
   useEffect(() => {
     // Load data immediately so registeredUsers is populated for login validation
-    loadDataFromDisk()
+    const initialLoad = async () => {
+      await loadDataFromDisk();
+      try {
+        const [gsRes, qiRefRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/golden-samples`),
+          fetch(`${API_BASE_URL}/api/qi-pdi-ref`)
+        ]);
+        if (gsRes.ok) setGoldenSamples(await gsRes.json());
+        if (qiRefRes.ok) setQiPdiRefSamples(await qiRefRes.json());
+      } catch (e) { /* silent */ }
+    };
+    initialLoad();
 
     // Setup auto-refresh polling every 3 seconds to keep data dynamic only when logged in
     let pollInterval;
+    const pollAll = async () => {
+      await loadDataFromDisk();
+      try {
+        const [gsRes, qiRefRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/golden-samples`),
+          fetch(`${API_BASE_URL}/api/qi-pdi-ref`)
+        ]);
+        if (gsRes.ok) setGoldenSamples(await gsRes.json());
+        if (qiRefRes.ok) setQiPdiRefSamples(await qiRefRes.json());
+      } catch (e) { /* silent */ }
+    };
     if (isLoggedIn) {
-      pollInterval = setInterval(loadDataFromDisk, 3000);
+      pollInterval = setInterval(pollAll, 3000);
     }
 
     const token = localStorage.getItem('arpl_token')
@@ -375,8 +408,6 @@ function App() {
       if (data.stats) setStats(data.stats)
       if (data.traceability) setTraceabilityData(data.traceability)
       if (data.deliveryPlanning) setDeliveryPlanning(data.deliveryPlanning)
-      if (data.goldenSamples) setGoldenSamples(data.goldenSamples)
-      if (data.qiPdiRefSamples) setQiPdiRefSamples(data.qiPdiRefSamples)
       // Only update permissions state if the user is NOT currently editing them on the Access Control tab
       if (data.permissions && !(pollingContextRef.current.currentPage === 'program' && pollingContextRef.current.activeProgramTab === 'access')) {
         setPermissions(prev => ({
@@ -2814,28 +2845,33 @@ function App() {
 
                   {activeProgramTab === 'programs' && (
                     <>
-                      <div className="filter-bar" style={{ marginBottom: 'var(--space-md)' }}>
-                        <button className="btn-small" onClick={() => setShowProgramFilters(!showProgramFilters)} style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
-                          <Filter size={14} /> {showProgramFilters ? 'Hide' : 'Show'} Filters
-                        </button>
-                        {showProgramFilters && (
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 6, padding: "5px 10px", background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 6 }}>
-                          <div style={{ width: '100%' }}>
-                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                              <input type="text" placeholder="Search name..." value={programFilters.search} onChange={(e) => setProgramFilters({ ...programFilters, search: e.target.value })} style={{ fontSize: 10, padding: '4px 8px', width: 140 }} />
-                              <select value={programFilters.category} onChange={(e) => setProgramFilters({ ...programFilters, category: e.target.value })} style={{ fontSize: 10, padding: '4px 8px', width: 120 }}>
-                                <option value="">All Categories</option>
-                                {[...new Set(programs.map(p => p.category))].map(c => <option key={c} value={c}>{c}</option>)}
-                              </select>
-                              <select value={programFilters.platform} onChange={(e) => setProgramFilters({ ...programFilters, platform: e.target.value })} style={{ fontSize: 10, padding: '4px 8px', width: 120 }}>
-                                <option value="">All Platforms</option>
-                                {[...new Set(programs.map(p => p.platform))].map(pl => <option key={pl} value={pl}>{pl}</option>)}
-                              </select>
-                            </div>
-                          </div>
-                        </div>
-                        )}
-                      </div>
+                      <FilterSection
+                        show={showProgramFilters}
+                        onToggle={() => setShowProgramFilters(!showProgramFilters)}
+                        label="Program Filters"
+                        activeCount={[programFilters.search, programFilters.category, programFilters.platform].filter(Boolean).length}
+                        onClear={() => setProgramFilters({ search: '', category: '', platform: '' })}
+                      >
+                        <FilterInput
+                          placeholder="Search name..."
+                          value={programFilters.search}
+                          onChange={(e) => setProgramFilters({ ...programFilters, search: e.target.value })}
+                        />
+                        <FilterSelect
+                          value={programFilters.category}
+                          onChange={(e) => setProgramFilters({ ...programFilters, category: e.target.value })}
+                        >
+                          <option value="">All Categories</option>
+                          {[...new Set(programs.map(p => p.category))].map(c => <option key={c} value={c}>{c}</option>)}
+                        </FilterSelect>
+                        <FilterSelect
+                          value={programFilters.platform}
+                          onChange={(e) => setProgramFilters({ ...programFilters, platform: e.target.value })}
+                        >
+                          <option value="">All Platforms</option>
+                          {[...new Set(programs.map(p => p.platform))].map(pl => <option key={pl} value={pl}>{pl}</option>)}
+                        </FilterSelect>
+                      </FilterSection>
 
                       <div className="stats-grid" style={{ marginBottom: 'var(--space-lg)' }}>
                         <div className="stat-card">
@@ -2982,32 +3018,44 @@ function App() {
 
                   {activeProgramTab === 'workorders' && (
                     <>
-                      <div className="filter-bar" style={{ marginBottom: 'var(--space-md)' }}>
-                        <button className="btn-small" onClick={() => setShowWorkOrderFilters(!showWorkOrderFilters)} style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
-                          <Filter size={14} /> {showWorkOrderFilters ? 'Hide' : 'Show'} Filters
-                        </button>
-                        {showWorkOrderFilters && (
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 6, padding: "5px 10px", background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 6 }}>
-                          <input type="text" placeholder="Search title..." value={workOrderFilters.search} onChange={(e) => setWorkOrderFilters({ ...workOrderFilters, search: e.target.value })} style={{ fontSize: 10, padding: '4px 8px', width: 140 }} />
-                          <select value={workOrderFilters.programId} onChange={(e) => setWorkOrderFilters({ ...workOrderFilters, programId: e.target.value })} style={{ fontSize: 10, padding: '4px 8px', width: 120 }}>
-                            <option value="">All Programs</option>
-                            {programs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                          </select>
-                          <select value={workOrderFilters.type} onChange={(e) => setWorkOrderFilters({ ...workOrderFilters, type: e.target.value })} style={{ fontSize: 10, padding: '4px 8px', width: 100 }}>
-                            <option value="">All Types</option>
-                            <option value="Customer">Customer</option>
-                            <option value="Internal">Internal</option>
-                          </select>
-                          <select value={workOrderFilters.stage} onChange={(e) => setWorkOrderFilters({ ...workOrderFilters, stage: e.target.value })} style={{ fontSize: 10, padding: '4px 8px', width: 110 }}>
-                            <option value="">All Stages</option>
-                            <option value="Sample A">Sample A</option>
-                            <option value="Sample B">Sample B</option>
-                            <option value="Sample C">Sample C</option>
-                            <option value="Sample D">Sample D</option>
-                          </select>
-                        </div>
-                        )}
-                      </div>
+                      <FilterSection
+                        show={showWorkOrderFilters}
+                        onToggle={() => setShowWorkOrderFilters(!showWorkOrderFilters)}
+                        label="Work Order Filters"
+                        activeCount={[workOrderFilters.search, workOrderFilters.programId, workOrderFilters.type, workOrderFilters.stage].filter(Boolean).length}
+                        onClear={() => setWorkOrderFilters({ search: '', programId: '', type: '', stage: '' })}
+                      >
+                        <FilterInput
+                          placeholder="Search title..."
+                          value={workOrderFilters.search}
+                          onChange={(e) => setWorkOrderFilters({ ...workOrderFilters, search: e.target.value })}
+                        />
+                        <FilterSelect
+                          value={workOrderFilters.programId}
+                          onChange={(e) => setWorkOrderFilters({ ...workOrderFilters, programId: e.target.value })}
+                        >
+                          <option value="">All Programs</option>
+                          {programs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </FilterSelect>
+                        <FilterSelect
+                          value={workOrderFilters.type}
+                          onChange={(e) => setWorkOrderFilters({ ...workOrderFilters, type: e.target.value })}
+                        >
+                          <option value="">All Types</option>
+                          <option value="Customer">Customer</option>
+                          <option value="Internal">Internal</option>
+                        </FilterSelect>
+                        <FilterSelect
+                          value={workOrderFilters.stage}
+                          onChange={(e) => setWorkOrderFilters({ ...workOrderFilters, stage: e.target.value })}
+                        >
+                          <option value="">All Stages</option>
+                          <option value="Sample A">Sample A</option>
+                          <option value="Sample B">Sample B</option>
+                          <option value="Sample C">Sample C</option>
+                          <option value="Sample D">Sample D</option>
+                        </FilterSelect>
+                      </FilterSection>
 
                       <div className="action-bar" style={{ marginBottom: 'var(--space-lg)', display: 'flex', justifyContent: 'flex-end' }}>
                         {!showWorkOrderForm && (currentUserInfo.roles || []).some(r => ['Administrator', 'Program Owner', 'Program Head'].includes(r)) && (
@@ -3596,29 +3644,41 @@ function App() {
                         </div>
                       </div>
 
-                      <div className="filter-bar" style={{ marginBottom: 'var(--space-md)' }}>
-                        <button className="btn-small" onClick={() => setShowUserFilters(!showUserFilters)} style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
-                          <Search size={14} /> {showUserFilters ? 'Hide' : 'Show'} Filters
-                        </button>
-{showUserFilters && (
-<div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 6, padding: "5px 10px", background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 6 }}>
-  <input type="text" placeholder="Search username..." value={userFilters.search} onChange={(e) => setUserFilters({ ...userFilters, search: e.target.value })} style={{ fontSize: 10, padding: '4px 8px', width: 140 }} />
-  <select style={{ fontSize: 10, padding: '4px 8px', width: 110 }} value={userFilters.role} onChange={(e) => setUserFilters({ ...userFilters, role: e.target.value })}>
-    <option value="">All Roles</option>
-    {AVAILABLE_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-  </select>
-  <select style={{ fontSize: 10, padding: '4px 8px', width: 120 }} value={userFilters.domain} onChange={(e) => setUserFilters({ ...userFilters, domain: e.target.value })}>
-    <option value="">All Domains</option>
-    {['Architecture', 'Structures', 'EM', 'NVH', 'E&E', 'Purchase', 'Business', 'Quality', 'Stores', 'Validation', 'Prototyping', 'Production', 'Thermal', 'Program', 'Engineering', 'Electrical', 'Technology', 'Mechanical Engineering'].map(d => <option key={d} value={d}>{d}</option>)}
-  </select>
-  <select style={{ fontSize: 10, padding: '4px 8px', width: 100 }} value={userFilters.status} onChange={(e) => setUserFilters({ ...userFilters, status: e.target.value })}>
-    <option value="">All Status</option>
-    <option value="Approved">Approved</option>
-    <option value="Pending">Pending</option>
-  </select>
-</div>
-)}
-                      </div>
+                      <FilterSection
+                        show={showUserFilters}
+                        onToggle={() => setShowUserFilters(!showUserFilters)}
+                        label="User Filters"
+                        activeCount={[userFilters.search, userFilters.role, userFilters.domain, userFilters.status].filter(Boolean).length}
+                        onClear={() => setUserFilters({ search: '', role: '', domain: '', status: '' })}
+                      >
+                        <FilterInput
+                          placeholder="Search username..."
+                          value={userFilters.search}
+                          onChange={(e) => setUserFilters({ ...userFilters, search: e.target.value })}
+                        />
+                        <FilterSelect
+                          value={userFilters.role}
+                          onChange={(e) => setUserFilters({ ...userFilters, role: e.target.value })}
+                        >
+                          <option value="">All Roles</option>
+                          {AVAILABLE_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                        </FilterSelect>
+                        <FilterSelect
+                          value={userFilters.domain}
+                          onChange={(e) => setUserFilters({ ...userFilters, domain: e.target.value })}
+                        >
+                          <option value="">All Domains</option>
+                          {['Architecture', 'Structures', 'EM', 'NVH', 'E&E', 'Purchase', 'Business', 'Quality', 'Stores', 'Validation', 'Prototyping', 'Production', 'Thermal', 'Program', 'Engineering', 'Electrical', 'Technology', 'Mechanical Engineering'].map(d => <option key={d} value={d}>{d}</option>)}
+                        </FilterSelect>
+                        <FilterSelect
+                          value={userFilters.status}
+                          onChange={(e) => setUserFilters({ ...userFilters, status: e.target.value })}
+                        >
+                          <option value="">All Status</option>
+                          <option value="Approved">Approved</option>
+                          <option value="Pending">Pending</option>
+                        </FilterSelect>
+                      </FilterSection>
 
                       <div className="card table-container">
                         <div className="card-header gradient">

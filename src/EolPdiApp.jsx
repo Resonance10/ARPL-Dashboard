@@ -856,6 +856,12 @@ function QiPdiReportContent({ report, reportRef, S }) {
 }
 
 function QiPdiPreviewModal({ report, show, onClose, onDownload, reportRef, S, theme }) {
+  useEffect(() => {
+    if (!show) return;
+    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [show, onClose]);
   if (!show || !report) return null;
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(0,0,0,0.72)', padding: 24, overflowY: 'auto' }}>
@@ -878,6 +884,12 @@ function QiPdiPreviewModal({ report, show, onClose, onDownload, reportRef, S, th
 
 // ── Report Preview Modal ───────────────────────────────────────────────────
 function ReportPreviewModal({ motor, show, onClose, onStatusUpdate, onRequestCorrection, onDownload, reportRef, S, theme, currentUser, goldenSamples }) {
+  useEffect(() => {
+    if (!show) return;
+    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [show, onClose]);
   if (!show || !motor) return null;
 
   const { overallPass } = computeMotorReportData(motor, goldenSamples);
@@ -1082,6 +1094,18 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
   const [showQiPdiModal, setShowQiPdiModal] = useState(false);
   const [pendingDownloadQiPdi, setPendingDownloadQiPdi] = useState(null);
 
+  // Escape-to-close all preview modals
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key !== 'Escape') return;
+      if (previewGolden) setPreviewGolden(null);
+      if (showPreviewModal) setShowPreviewModal(false);
+      if (showQiPdiModal) setShowQiPdiModal(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewGolden, showPreviewModal, showQiPdiModal]);
+
   const resetGoldenForm = () => {
     setGoldenForm({
       motorCode: "", motorModel: "", nominalVoltage: "", peakPower: "", peakTorque: "", peakCurrentAC: "", maxSpeed: "",
@@ -1247,7 +1271,6 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
       if (res.ok) {
         const data = await res.json();
         if (setGoldenSamples) setGoldenSamples(data);
-        if (syncToDisk) syncToDisk({ key: 'goldenSamples', data });
       }
     } catch (e) { console.error(e); }
   };
@@ -1258,7 +1281,6 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
       if (res.ok) {
         const data = await res.json();
         if (setQiPdiRefSamples) setQiPdiRefSamples(data);
-        if (syncToDisk) syncToDisk({ key: 'qiPdiRefSamples', data });
       }
     } catch (e) { console.error(e); }
   };
@@ -2676,9 +2698,9 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
                         <div>
                           <div style={S.label}>Encoder Limits</div>
                           <div style={{ fontSize: 11, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 10px' }}>
-                            {Object.entries(previewGolden.encoder).map(([k, v]) => (
+                            {previewGolden.encoder ? Object.entries(previewGolden.encoder).map(([k, v]) => (
                               <span key={k}>{k}: <b>{v}</b></span>
-                            ))}
+                            )) : <span style={{ gridColumn: '1 / -1', color: activeTheme.textMuted }}>No encoder data</span>}
                           </div>
                         </div>
                       </div>
@@ -2689,10 +2711,10 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
                           <PerfChart
                             title="Torque Reference"
                             unit="Nm"
-                            data={Object.entries(previewGolden.torqueCurve).map(([s, v]) => ({
-                              speed: s,
-                              Golden: v
-                            }))}
+                            data={previewGolden.performanceCurves
+                              ? previewGolden.performanceCurves.map(c => ({ speed: c.rpm, Golden: c.torque }))
+                              : Object.entries(previewGolden.torqueCurve || {}).map(([s, v]) => ({ speed: s, Golden: v }))
+                            }
                             gsKey="Golden"
                             theme={activeTheme}
                           />

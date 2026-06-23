@@ -7,6 +7,7 @@ import {
   FileUp, MessageSquare, Trash2, X, Eye, Save, Hash
 } from 'lucide-react';
 import { API_BASE_URL } from "./constants";
+import { FilterSection, FilterInput, FilterSelect, FilterDateInput } from './components/ui';
 
 const formatDate = (dateInput) => {
   if (!dateInput) return 'N/A';
@@ -889,22 +890,23 @@ const PurchaseOrder = ({
 
       {activeTab === 'my_request' && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="card table-container">
-          <div className="toolbar" style={{ display: 'flex', gap: 'var(--space-sm)', padding: 'var(--space-sm) var(--space-lg)', flexWrap: 'wrap', alignItems: 'center', borderBottom: '1px solid var(--border)' }}>
-            <button className="btn-small" onClick={() => setShowMyReqFilters(!showMyReqFilters)} style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
-              <Filter size={14} /> {showMyReqFilters ? 'Hide' : 'Show'} Filters
-            </button>
-            {showMyReqFilters && <>
-              <select value={myRequestFilters.status} onChange={e => setMyRequestFilters({ ...myRequestFilters, status: e.target.value })} style={{ fontSize: 'var(--fs-sm)', padding: '6px 10px', borderRadius: 'var(--radius-sm)', minWidth: '120px' }}>
-                <option value="">All Statuses</option><option>Pending Owner</option><option>Pending Admin</option><option>Pending Head</option><option>Approved</option><option>Correction Required</option><option>Rejected</option><option>Cancelled</option>
-              </select>
-              <select value={myRequestFilters.program} onChange={e => setMyRequestFilters({ ...myRequestFilters, program: e.target.value })} style={{ fontSize: 'var(--fs-sm)', padding: '6px 10px', borderRadius: 'var(--radius-sm)', minWidth: '120px' }}>
-                <option value="">All Programs</option>{[...new Set(protoRequests.map(r => r.programName))].map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-              <select value={myRequestFilters.vendor} onChange={e => setMyRequestFilters({ ...myRequestFilters, vendor: e.target.value })} style={{ fontSize: 'var(--fs-sm)', padding: '6px 10px', borderRadius: 'var(--radius-sm)', minWidth: '120px' }}>
-                <option value="">All Vendors</option>{vendors.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
-              </select>
-            </>}
-          </div>
+          <FilterSection
+            show={showMyReqFilters}
+            onToggle={() => setShowMyReqFilters(!showMyReqFilters)}
+            label="My Request Filters"
+            activeCount={[myRequestFilters.status, myRequestFilters.program, myRequestFilters.vendor].filter(Boolean).length}
+            onClear={() => setMyRequestFilters({ status: '', program: '', vendor: '' })}
+          >
+            <FilterSelect value={myRequestFilters.status} onChange={e => setMyRequestFilters({ ...myRequestFilters, status: e.target.value })}>
+              <option value="">All Statuses</option><option>Pending Owner</option><option>Pending Admin</option><option>Pending Head</option><option>Approved</option><option>Correction Required</option><option>Rejected</option><option>Cancelled</option>
+            </FilterSelect>
+            <FilterSelect value={myRequestFilters.program} onChange={e => setMyRequestFilters({ ...myRequestFilters, program: e.target.value })}>
+              <option value="">All Programs</option>{[...new Set(protoRequests.map(r => r.programName))].map(p => <option key={p} value={p}>{p}</option>)}
+            </FilterSelect>
+            <FilterSelect value={myRequestFilters.vendor} onChange={e => setMyRequestFilters({ ...myRequestFilters, vendor: e.target.value })}>
+              <option value="">All Vendors</option>{vendors.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
+            </FilterSelect>
+          </FilterSection>
           <table className="enterprise-table">
             <thead className="sticky-header"><tr><th>Date</th><th>Title</th><th>Vendor</th><th>Progress</th><th>Status</th><th className="text-right" style={{ paddingRight: 'var(--space-md)' }}>Actions</th></tr></thead>
             <tbody>
@@ -986,23 +988,26 @@ const PurchaseOrder = ({
       {activeTab === 'report' && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="page-view">
           <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
-            <div style={{ padding: 'var(--space-sm) var(--space-lg)', borderBottom: '1px solid var(--border)' }}>
-              <button className="btn-small" onClick={() => setShowReportFilters(!showReportFilters)} style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
-                <Filter size={14} /> {showReportFilters ? 'Hide' : 'Show'} Filters
-              </button>
-            </div>
-            {showReportFilters && (
-            <div style={{ padding: 'var(--space-sm) var(--space-lg)', display: 'flex', gap: 'var(--space-sm)', flexWrap: 'wrap', alignItems: 'center', borderTop: '1px solid var(--border)' }}>
-               <input type="date" value={reportFilters.startDate} onChange={e => setReportFilters({ ...reportFilters, startDate: e.target.value })} style={{ fontSize: 'var(--fs-sm)', padding: '6px 10px', borderRadius: 'var(--radius-sm)' }} />
-               <input type="date" value={reportFilters.endDate} onChange={e => setReportFilters({ ...reportFilters, endDate: e.target.value })} style={{ fontSize: 'var(--fs-sm)', padding: '6px 10px', borderRadius: 'var(--radius-sm)' }} />
-               <select value={reportFilters.program} onChange={e => setReportFilters({ ...reportFilters, program: e.target.value })} style={{ fontSize: 'var(--fs-sm)', padding: '6px 10px', borderRadius: 'var(--radius-sm)', minWidth: '120px' }}><option value="">All Programs</option>{[...new Set(protoRequests.map(r => r.programName))].map(p => <option key={p} value={p}>{p}</option>)}</select>
-               <select value={reportFilters.vendor} onChange={e => setReportFilters({ ...reportFilters, vendor: e.target.value })} style={{ fontSize: 'var(--fs-sm)', padding: '6px 10px', borderRadius: 'var(--radius-sm)', minWidth: '120px' }}><option value="">All Vendors</option>{vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select>
-               <select value={reportFilters.status} onChange={e => setReportFilters({ ...reportFilters, status: e.target.value })} style={{ fontSize: 'var(--fs-sm)', padding: '6px 10px', borderRadius: 'var(--radius-sm)', minWidth: '120px' }}>
-                 <option value="">All Statuses</option><option>Pending Owner</option><option>Pending Admin</option><option>Pending Head</option><option>Approved</option><option>Correction Required</option><option>Rejected</option><option>Cancelled</option>
-               </select>
-               <button className="btn-small" onClick={handleExportReport} style={{ padding: '6px 12px', fontSize: 'var(--fs-sm)' }} title="Download the filtered report as a CSV file"><Download size={14} /> Export</button>
-             </div>
-            )}
+            <FilterSection
+              show={showReportFilters}
+              onToggle={() => setShowReportFilters(!showReportFilters)}
+              label="Report Filters"
+              activeCount={[reportFilters.startDate, reportFilters.endDate, reportFilters.program, reportFilters.vendor, reportFilters.status].filter(Boolean).length}
+              onClear={() => setReportFilters({ startDate: '', endDate: '', program: '', vendor: '', status: '' })}
+            >
+              <FilterDateInput value={reportFilters.startDate} onChange={e => setReportFilters({ ...reportFilters, startDate: e.target.value })} />
+              <FilterDateInput value={reportFilters.endDate} onChange={e => setReportFilters({ ...reportFilters, endDate: e.target.value })} />
+              <FilterSelect value={reportFilters.program} onChange={e => setReportFilters({ ...reportFilters, program: e.target.value })}>
+                <option value="">All Programs</option>{[...new Set(protoRequests.map(r => r.programName))].map(p => <option key={p} value={p}>{p}</option>)}
+              </FilterSelect>
+              <FilterSelect value={reportFilters.vendor} onChange={e => setReportFilters({ ...reportFilters, vendor: e.target.value })}>
+                <option value="">All Vendors</option>{vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+              </FilterSelect>
+              <FilterSelect value={reportFilters.status} onChange={e => setReportFilters({ ...reportFilters, status: e.target.value })}>
+                <option value="">All Statuses</option><option>Pending Owner</option><option>Pending Admin</option><option>Pending Head</option><option>Approved</option><option>Correction Required</option><option>Rejected</option><option>Cancelled</option>
+              </FilterSelect>
+              <button className="btn-small" onClick={handleExportReport} style={{ padding: '6px 12px', fontSize: 'var(--fs-sm)' }} title="Download the filtered report as a CSV file"><Download size={14} /> Export</button>
+            </FilterSection>
            </div>
           <div style={{ marginBottom: 'var(--space-lg)' }}>
             <div className="stat-card" style={{ maxWidth: '250px' }}><span className="stat-label"><Package size={14} style={{ marginRight: 'var(--space-xs)' }} /> Filtered Count</span><span className="stat-value">{reportStats.count}</span></div>
