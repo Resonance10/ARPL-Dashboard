@@ -17,6 +17,15 @@ export const generateRefId = (type, existingItems) => {
     }
   });
 
-  const serial = String(maxSerial + 1).padStart(2, '0');
-  return `${prefix}${serial}`;
+  // Guard against collisions: if a concurrently-created item already holds the
+  // next serial (e.g. polled in from another client), keep advancing until the
+  // generated id is genuinely unique within the current item set.
+  const existingIds = new Set(existingItems.map(item => item.refId).filter(Boolean));
+  let nextSerial = maxSerial + 1;
+  let candidate = `${prefix}${String(nextSerial).padStart(2, '0')}`;
+  while (existingIds.has(candidate)) {
+    nextSerial += 1;
+    candidate = `${prefix}${String(nextSerial).padStart(2, '0')}`;
+  }
+  return candidate;
 };

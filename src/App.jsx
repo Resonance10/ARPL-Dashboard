@@ -27,10 +27,9 @@ const FEATURE_LABELS = {
   eol_reports: "EOL & PDI Reports"
 };
 
-const BRAND = '#c36e46';
-/* Data-viz palette — independent of brand accent */
-const CHART_STAGE_COLORS = ['#8b5cf6', '#64748b', '#a78bfa', '#f59e0b'];
-const CHART_PROGRAM_COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#6366f1', '#ec4899'];
+/* Chart palettes — kept in sync with the PO module dashboards for consistency */
+const CHART_STAGE_COLORS = ['#c36e46', '#f59e0b', '#3b82f6', '#10b981'];
+const CHART_PROGRAM_COLORS = ['#c36e46', '#6366f1', '#ec4899', '#14b8a6', '#f97316'];
 
 const FEATURE_DESCRIPTIONS = {
   po_prototype: "Controls access to Prototype Purchase Requests, allowing users to submit quotations and manage approvals.",
@@ -257,6 +256,11 @@ function App() {
     pollingContextRef.current = { currentPage, activeProgramTab };
   }, [currentPage, activeProgramTab]);
 
+  // Tracks in-flight local writes so the 3s poll never overwrites optimistic UI
+  // state with stale server data while (or just after) a save is happening.
+  const pendingWritesRef = useRef(0);
+  const lastWriteAtRef = useRef(0);
+
   // Global Escape-to-close for modals
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -271,11 +275,20 @@ function App() {
   // Custom Toast State
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
   const [uploadProgress, setUploadProgress] = useState(0);
+  const toastTimerRef = useRef(null);
   const showToast = (message, type = 'info') => {
+    // Clear any pending auto-close so a previous timer can't dismiss this toast early
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
     setToast({ visible: true, message, type });
     // Auto close for non-critical info
     if (type !== 'error' && type !== 'warning') {
-      setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 3000);
+      toastTimerRef.current = setTimeout(() => {
+        setToast(prev => ({ ...prev, visible: false }));
+        toastTimerRef.current = null;
+      }, 3000);
     }
   };
 
@@ -346,7 +359,7 @@ function App() {
   useEffect(() => {
     // Load data immediately so registeredUsers is populated for login validation
     const initialLoad = async () => {
-      await loadDataFromDisk();
+      await loadDataFromDisk(true);
       try {
         const [gsRes, qiRefRes] = await Promise.all([
           fetch(`${API_BASE_URL}/api/golden-samples`),
@@ -361,6 +374,11 @@ function App() {
     // Setup auto-refresh polling every 3 seconds to keep data dynamic only when logged in
     let pollInterval;
     const pollAll = async () => {
+      // Skip the refresh while a local write is in flight or just settled, so we
+      // don't clobber optimistic state before the server has persisted it.
+      if (pendingWritesRef.current > 0 || (Date.now() - lastWriteAtRef.current) < 2000) {
+        return;
+      }
       await loadDataFromDisk();
       try {
         const [gsRes, qiRefRes] = await Promise.all([
@@ -401,9 +419,10 @@ function App() {
     localStorage.setItem('arpl_theme', theme);
   }, [theme]);
 
-  const loadDataFromDisk = async () => {
+  const loadDataFromDisk = async (showError = false) => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/data`);
+      if (!response.ok) throw new Error(`Server responded ${response.status}`);
       const data = await response.json();
       if (data.programs) setPrograms(data.programs)
       if (data.workOrders) setWorkOrders(data.workOrders)
@@ -424,6 +443,9 @@ function App() {
       if (data.notifications) setNotifications(data.notifications)
     } catch (error) {
       console.error("Could not load data from local server. Using defaults.", error);
+      if (showError) {
+        showToast("Cannot reach the server. Please ensure the backend is running, then reload.", "error");
+      }
     }
   }
 
@@ -469,7 +491,7 @@ function App() {
     if (userRoles.some(r => ['Administrator', 'Developer'].includes(r))) return true;
 
     const config = permissions[featureKey];
-    if (!config) return true; // Default to accessible if no config found
+    if (!config) return false; // Default to deny if no config found (fail-closed)
 
     const hasFull = config.roles.some(r => userRoles.includes(r)) || config.domains.includes(currentUserInfo.domain);
     if (level === 'full') return hasFull;
@@ -549,9 +571,6 @@ function App() {
       req.programAdmin === loginForm.username
     );
 
-    const scopedPrograms = (isAdmin || userRoles.some(r => ['Engineer', 'Sr. Engineer', 'Functional Head', 'Program Admin'].includes(r))) ? programs : programs.filter(p =>
-      p.owner === loginForm.username || p.admin === loginForm.username
-    );
     // Updated to include roles with view access to program_management
     const canViewAllPrograms = isAdmin || permissions.program_management.roles.some(r => userRoles.includes(r)) || permissions.program_management.viewRoles.some(r => userRoles.includes(r));
     const finalScopedPrograms = canViewAllPrograms ? programs : programs.filter(p => p.owner === loginForm.username || p.admin === loginForm.username);
@@ -684,6 +703,7 @@ function App() {
    * via the Node.js backend server.
    */
   const syncToDisk = async (data) => {
+    pendingWritesRef.current += 1;
     try {
       await fetch(`${API_BASE_URL}/api/save`, {
         method: 'POST',
@@ -697,6 +717,9 @@ function App() {
       console.log('Auto-sync: json.storage updated.')
     } catch (error) {
       console.error('Auto-sync failed. Ensure server.js is running.', error)
+    } finally {
+      lastWriteAtRef.current = Date.now();
+      pendingWritesRef.current = Math.max(0, pendingWritesRef.current - 1);
     }
   }
 
@@ -761,7 +784,7 @@ function App() {
 
     const otherMonthsPlanned = Object.entries(currentItemPlanning)
       .filter(([m]) => m !== monthId)
-      .reduce((sum, [_, v]) => sum + v, 0);
+      .reduce((sum, [_, v]) => sum + (Number(v) || 0), 0);
 
     if (otherMonthsPlanned + newValue > itemTotalQty) {
       showToast(`Total planned (${otherMonthsPlanned + newValue}) exceeds item quantity (${itemTotalQty}).`, "warning");
@@ -806,6 +829,13 @@ function App() {
 
       oscillator.start(ctx.currentTime);
       oscillator.stop(ctx.currentTime + 0.3);
+      // Release the nodes once playback ends so they don't accumulate on the shared context
+      oscillator.onended = () => {
+        try {
+          oscillator.disconnect();
+          gain.disconnect();
+        } catch { /* already disconnected */ }
+      };
     } catch {
       // Audio not supported, silently skip
     }
@@ -983,6 +1013,10 @@ function App() {
   const handleRegister = async () => {
     const errors = {};
     if (!registerForm.username) errors.username = 'Username is required.';
+    else if (['Admin', 'DEV', 'Program Admin'].includes(registerForm.username) ||
+             registeredUsers.some(u => u.username.toLowerCase() === registerForm.username.toLowerCase())) {
+      errors.username = 'This username is already taken.';
+    }
     if (!registerForm.fullName) errors.fullName = 'Full Name is required.';
     if (registerForm.roles.length === 0) errors.roles = 'At least one role must be assigned.';
     if (!registerForm.domain) errors.domain = 'Domain is required.';
@@ -1125,6 +1159,24 @@ function App() {
     let targetUser = request.requestedBy
     let msg = ""
 
+    // Authorization: confirm the acting user is the designated approver for this stage.
+    const actingUser = loginForm.username;
+    const isSuperUser = ['Admin', 'DEV'].includes(actingUser) ||
+      userRoles.some(r => ['Administrator', 'Developer'].includes(r));
+    const isReassignedToMe = request.isReassigned && request.reassignedTo === actingUser;
+    const stageApprover = {
+      'Pending Owner': () => request.programOwner === actingUser || userRoles.includes('Program Owner'),
+      'Pending Production Head': () => userRoles.includes('Production Head'),
+      'Pending Admin': () => request.programAdmin === actingUser || userRoles.includes('Program Admin'),
+      'Pending Head': () => userRoles.includes('Program Head'),
+      'Pending Program Head': () => userRoles.includes('Program Head'),
+    }[request.status];
+    const isAuthorizedApprover = isSuperUser || isReassignedToMe || (stageApprover ? stageApprover() : false);
+    if (!isAuthorizedApprover) {
+      showToast("You are not authorized to act on this request at its current stage.", "error");
+      return;
+    }
+
     let historyAction = '';
     if (action === 'approve') {
       if (request.status === 'Pending Owner' || request.status === 'Pending Production Head') historyAction = 'Approval Granted';
@@ -1253,6 +1305,11 @@ function App() {
   }
 
   const handleCancelRequest = (requestId) => {
+    const req = poRequests.find(r => r.id === requestId)
+    if (!req) {
+      showToast('This request no longer exists.', 'warning')
+      return
+    }
     if (window.confirm("Are you sure you want to cancel this request?")) {
       const updated = poRequests.map(r => {
         if (r.id === requestId) return { ...r, status: 'Cancelled' }
@@ -1262,8 +1319,9 @@ function App() {
       syncToDisk({ key: 'poRequests', data: updated })
 
       // Notify Admin/Owner if they were involved
-      const req = poRequests.find(r => r.id === requestId)
-      addNotification(req.programOwner, `User cancelled request: ${req.title}`, requestId, 'po')
+      if (req.programOwner) {
+        addNotification(req.programOwner, `User cancelled request: ${req.title}`, requestId, 'po')
+      }
     }
   }
 
@@ -1682,7 +1740,7 @@ function App() {
     setPoRequestForm({
       title: '', vendorId: '', type: 'PO', category: 'Prototypes (BO & Machining)',
       workOrderId: '', programName: '', programOwner: '', programAdmin: 'Program Admin', budgetCode: '',
-      items: [{ partDrawing: '', partName: '', unit: 'Nos.', qty: '', unitPrice: '' }],
+      items: [{ partDrawing: '', partName: '', unit: 'Nos.', qty: '', unitPrice: '', currency: 'INR' }],
       paymentMode: 'Credit', paymentComments: '', deliveryValue: '', deliveryUnit: 'Days',
       qualityAssurance: false, qualityTC: false, remarks: '', fileName: ''
     })
@@ -1944,6 +2002,10 @@ function App() {
     `).join('');
 
     const newWindow = window.open('', '_blank');
+    if (!newWindow) {
+      showToast('Unable to open the PDF window. Please allow pop-ups for this site and try again.', 'warning');
+      return;
+    }
     newWindow.document.write(`
       <html>
         <head>
@@ -2069,7 +2131,7 @@ function App() {
               const element = document.getElementById('pdf-content');
               const opt = {
                 margin:       [10, 10, 10, 10],
-                filename:     '${(req.refId || 'PR').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}_${pdfFilenamePrefix}.pdf',
+                filename:     '${String(req.refId || 'PR').replace(/[^a-zA-Z0-9_-]/g, '_')}_${String(pdfFilenamePrefix).replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf',
                 image:        { type: 'jpeg', quality: 0.98 },
                 html2canvas:  { scale: 2, useCORS: true },
                 jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
@@ -2161,13 +2223,17 @@ function App() {
   const sidebarBadges = useMemo(() => {
     const roles = currentUserInfo.roles || [];
 
-    // Badges from PO requests pending approval
-    const pendingPOs = poRequests.filter(req => {
+    // Badges from PO requests pending approval — route prototype vs production to the right page
+    const isPendingForMe = (req) => {
       if (req.status === 'Pending Owner') return req.programOwner === loginForm.username || roles.includes('Program Head');
       if (req.status === 'Pending Admin') return req.programAdmin === loginForm.username;
       if (req.status === 'Pending Head') return roles.includes('Program Head');
+      if (req.status === 'Pending Production Head') return roles.includes('Production Head');
+      if (req.status === 'Pending Program Head') return roles.includes('Program Head');
       return false;
-    }).length;
+    };
+    const pendingPOs = poRequests.filter(req => !req.isProduction && isPendingForMe(req)).length;
+    const pendingProdPOs = poRequests.filter(req => req.isProduction && isPendingForMe(req)).length;
 
     // Badges from notifications per page
     const notifCounts = { po: 0, po_production: 0, motor_traceability: 0, eol_reports: 0, program: 0 };
@@ -2179,7 +2245,7 @@ function App() {
       }
     });
 
-    return { po: pendingPOs + notifCounts.po, po_production: notifCounts.po_production, motor_traceability: notifCounts.motor_traceability, eol_reports: notifCounts.eol_reports, program: notifCounts.program };
+    return { po: pendingPOs + notifCounts.po, po_production: pendingProdPOs + notifCounts.po_production, motor_traceability: notifCounts.motor_traceability, eol_reports: notifCounts.eol_reports, program: notifCounts.program };
   }, [poRequests, currentUserInfo, loginForm.username, notifications]);
 
   const addWOItemRow = () => {

@@ -777,9 +777,16 @@ const PartTraceability = ({ workOrders = [], programs = [], traceabilityData = [
 
               <div className="card">
                 <div className="card-body">
-                  <h3 className="section-heading accent-bottom"><LineChartIcon size={20} color="var(--accent)" /> Planned vs Actual Trend</h3>
+                  <h3 className="section-heading accent-bottom"><LineChartIcon size={20} color="var(--accent)" /> Cumulative Planned vs Actual Trend</h3>
                   <ResponsiveContainer width="100%" height={240}>
-                    <LineChart data={monthlyTrends.map(m => ({ month: m.month.substring(0, 3), planned: m.planned, actual: m.actual }))}>
+                    <LineChart data={(() => {
+                      let cumPlanned = 0, cumActual = 0;
+                      return monthlyTrends.map(m => {
+                        cumPlanned += m.planned;
+                        cumActual += m.actual;
+                        return { month: m.month.substring(0, 3), planned: cumPlanned, actual: cumActual };
+                      });
+                    })()}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                       <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'var(--text-sub)' }} />
                       <YAxis tick={{ fontSize: 11, fill: 'var(--text-sub)' }} />
@@ -1158,7 +1165,7 @@ const PartTraceability = ({ workOrders = [], programs = [], traceabilityData = [
       {/* Reassign Modal for Motor Traceability */}
       <AnimatePresence>
         {reassigningEntry && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'var(--overlay-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="card" style={{ maxWidth: '400px', width: '90%', padding: 'var(--space-xl)', position: 'relative' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-lg)' }}>
                 <h3 style={{ margin: 0 }}>Reassign Traceability Approval</h3>

@@ -6,8 +6,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
 import logo from "./logo.webp";
-const arLogo = "/AR LOGO.png";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Download, Printer, Save, RotateCcw, FileText, Upload, X, XCircle, FileSpreadsheet } from "lucide-react";
 import { API_BASE_URL } from "./constants";
 
 // Shared html2pdf options
@@ -159,11 +158,7 @@ const getStyles = (theme) => ({
     gap: 8,
     background: theme.surfaceAlt,
     borderBottom: `1px solid ${theme.border}`,
-    padding: "8px 32px",
-    position: "sticky",
-    top: 65,
-    zIndex: 999,
-    backdropFilter: "blur(8px)"
+    padding: "8px 32px"
   },
   stepBtn: (active, done) => ({
     padding: "10px 20px", fontSize: 11, fontWeight: 700, letterSpacing: 1, cursor: "pointer", border: "none",
@@ -200,16 +195,24 @@ const getStyles = (theme) => ({
   },
   sectionTitle: { fontSize: "12px", fontWeight: 800, letterSpacing: 2, color: theme.primary, textTransform: "uppercase", marginBottom: 10, borderBottom: `1px solid ${theme.border}`, paddingBottom: 4, wordBreak: "break-word" },
   label: { fontSize: 11, fontWeight: 700, letterSpacing: 0.6, color: theme.textMuted, textTransform: "uppercase", display: "block", marginBottom: 4, wordBreak: "break-word" },
-  input: { background: theme.surfaceAlt, border: `1px solid ${theme.border}`, borderRadius: 8, color: theme.accent, fontSize: 12, padding: "6px 10px", width: "100%", outline: "none", transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)" },
+  input: { background: "var(--input-bg, var(--bg))", border: `1px solid ${theme.border}`, borderRadius: "var(--input-radius, 8px)", color: "var(--text)", fontSize: 12, padding: "6px 10px", width: "100%", outline: "none", transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)" },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 14, border: `1px solid ${theme.border}`, fontStretch: "normal", tableLayout: "auto" },
   th: { padding: "6px 10px", textAlign: "left", fontSize: 14, fontWeight: 700, letterSpacing: 0.5, color: theme.text, textTransform: "uppercase", borderBottom: `2px solid ${theme.border}`, borderRight: `1px solid ${theme.border}`, background: theme.primary + "11", whiteSpace: "normal", wordBreak: "break-word" },
   td: { padding: "4px 8px", borderBottom: `1px solid ${theme.border}`, borderRight: `1px solid ${theme.border}`, fontStretch: "normal", wordBreak: "break-word" },
-  btn: (variant = "primary") => ({
-    padding: "10px 24px", fontSize: 12, fontWeight: 700, letterSpacing: 2,
-    textTransform: "uppercase", border: "none", borderRadius: 6, cursor: "pointer",
-    background: variant === "primary" ? theme.primary : (variant === "success" ? theme.success : (variant === "default" ? theme.border : theme.error)),
-    color: "#fff", transition: "all 0.2s"
-  }),
+  btn: (variant = "primary") => {
+    // Aligned with the app-wide button system (.btn-small / .btn-approve / .btn-reject)
+    // so the EOL/PDI module matches the rest of the app instead of all-caps pills.
+    const base = {
+      padding: "7px 16px", fontSize: 12, fontWeight: 700, letterSpacing: "0.02em",
+      border: "1px solid transparent", borderRadius: "var(--btn-radius, 8px)", cursor: "pointer",
+      display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+      whiteSpace: "nowrap", transition: "all 0.2s",
+    };
+    if (variant === "success") return { ...base, background: "var(--emerald-text)", borderColor: "var(--emerald-text)", color: "#fff" };
+    if (variant === "error") return { ...base, background: "transparent", borderColor: "var(--rose-text)", color: "var(--rose-text)" };
+    if (variant === "default") return { ...base, background: "var(--bg-card)", borderColor: "var(--border)", color: "var(--text)" };
+    return { ...base, background: "var(--accent)", borderColor: "var(--accent)", color: "#fff" }; // primary
+  },
   uploadZone: (drag) => ({
     border: `2px dashed ${drag ? theme.primary : theme.border}`, borderRadius: 12,
     padding: "14px", textAlign: "center", cursor: "pointer",
@@ -269,7 +272,7 @@ function UploadZone({ label, accept, onFile, parsed, fileName, S, theme, disable
         <input ref={ref} type="file" accept={accept} style={{ display: "none" }} onChange={e => handle(e.target.files[0])} />
         {fileName
           ? <div>
-            <div style={{ fontSize: 20, marginBottom: 6 }}>✓</div>
+            <div style={{ marginBottom: 6, color: theme.success }}><CheckCircle2 size={20} /></div>
             <div style={{
               color: theme.success,
               fontSize: 14,
@@ -283,7 +286,7 @@ function UploadZone({ label, accept, onFile, parsed, fileName, S, theme, disable
             <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 4 }}>Click to replace</div>
           </div>
           : <div>
-            <div style={{ fontSize: 32, marginBottom: 8, color: theme.border }}>⬆</div>
+            <div style={{ marginBottom: 8, color: theme.border, display: 'flex', justifyContent: 'center' }}><Upload size={32} /></div>
             <div style={{ color: theme.textMuted, fontSize: 13, fontWeight: 600 }}>DROP FILE OR CLICK TO BROWSE</div>
             <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 4 }}>{accept}</div>
           </div>
@@ -875,7 +878,7 @@ function QiPdiPreviewModal({ report, show, onClose, onDownload, reportRef, S, th
   }, [show, onClose]);
   if (!show || !report) return null;
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(0,0,0,0.72)', padding: 24, overflowY: 'auto' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'var(--overlay-bg)', padding: 24, overflowY: 'auto' }}>
       <div style={{ maxWidth: 1400, margin: '0 auto', background: theme.surface, borderRadius: 18, boxShadow: '0 20px 60px rgba(0,0,0,0.35)', padding: 20, minWidth: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
           <div>
@@ -884,7 +887,7 @@ function QiPdiPreviewModal({ report, show, onClose, onDownload, reportRef, S, th
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button style={S.btn('default')} onClick={onClose}>Close</button>
-            <button style={S.btn('success')} onClick={() => onDownload(report)}>⬇ Download PDF</button>
+            <button style={S.btn('success')} onClick={() => onDownload(report)}><Download size={14} /> Download PDF</button>
           </div>
         </div>
         <QiPdiReportContent report={report} reportRef={reportRef} S={S} />
@@ -906,7 +909,7 @@ function ReportPreviewModal({ motor, show, onClose, onStatusUpdate, onRequestCor
   const { overallPass } = computeMotorReportData(motor, goldenSamples);
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(0,0,0,0.72)', padding: 24, overflowY: 'auto' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'var(--overlay-bg)', padding: 24, overflowY: 'auto' }}>
       <div style={{ maxWidth: 1400, margin: '0 auto', background: theme.surface, borderRadius: 18, boxShadow: '0 20px 60px rgba(0,0,0,0.35)', padding: 20, minWidth: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
           <div>
@@ -916,7 +919,7 @@ function ReportPreviewModal({ motor, show, onClose, onStatusUpdate, onRequestCor
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button style={S.btn('default')} onClick={onClose}>Close</button>
             <button style={S.btn(motor.status === 'APPROVED' ? 'success' : 'default')} onClick={() => onDownload(motor)} disabled={motor.status !== 'APPROVED'}>
-              ⬇ Download PDF
+              <Download size={14} /> Download PDF
             </button>
           </div>
         </div>
@@ -1460,17 +1463,11 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
   useEffect(() => {
     fetchMotors();
 
-    // Set document title and favicon
+    // Section-specific tab title; restore it when leaving the EOL/PDI tab.
+    // The favicon (company logo) is set site-wide in index.html, so it is left untouched.
+    const previousTitle = document.title;
     document.title = "EOL & PDI Report Generator";
-    const favicon = document.querySelector("link[rel*='icon']");
-    if (favicon) {
-      favicon.href = arLogo;
-    } else {
-      const link = document.createElement("link");
-      link.rel = "icon";
-      link.href = arLogo;
-      document.head.appendChild(link);
-    }
+    return () => { document.title = previousTitle; };
   }, []);
 
 
@@ -2662,8 +2659,8 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
                     </table>
                     <button style={{ ...S.btn('default'), width: '100%', marginBottom: 20 }} onClick={() => setGoldenForm({ ...goldenForm, performanceCurves: [...goldenForm.performanceCurves, { rpm: "", torque: "", power: "", efficiency: "" }] })}>+ Add Row</button>
                     <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
-                      <button style={{ ...S.btn("primary"), flex: 1 }} onClick={saveGoldenSample}>💾 Save Configuration</button>
-                      <button style={{ ...S.btn("default"), flex: 1 }} onClick={resetGoldenForm}>🔄 Reset Form</button>
+                      <button style={{ ...S.btn("primary"), flex: 1 }} onClick={saveGoldenSample}><Save size={14} /> Save Configuration</button>
+                      <button style={{ ...S.btn("default"), flex: 1 }} onClick={resetGoldenForm}><RotateCcw size={14} /> Reset Form</button>
                     </div>
                   </div>
                 </div>
@@ -2686,7 +2683,7 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
                     </thead>
                     <tbody>
                       {goldenSamples.length === 0 ? (
-                        <tr><td colSpan="4" style={{ ...S.td, textAlign: 'center', color: activeTheme.textMuted }}>No models configured yet.</td></tr>
+                        <tr><td colSpan="6" style={{ ...S.td, textAlign: 'center', color: activeTheme.textMuted }}>No models configured yet.</td></tr>
                       ) : (
                         goldenSamples.map((s) => (
                           <tr key={s.id || s.motorModel} style={{ background: activeTheme.surface }}>
@@ -2792,12 +2789,12 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
                       onClick={saveQiPdiRef}
                       disabled={isSaving}
                     >
-                      {isSaving ? "Saving..." : "💾 Save Reference Checklist"}
+                      {isSaving ? "Saving..." : <><Save size={14} /> Save Reference Checklist</>}
                     </button>
                     <button style={{ ...S.btn("default"), flex: 1 }} onClick={() => {
                       setQiPdiRefForm({ motorCode: "", motorModel: "", checklist: QI_PDI_DEFAULTS.map(i => ({ ...i })) });
                       setEditingQiPdiRefId(null);
-                    }}>🔄 Reset</button>
+                    }}><RotateCcw size={14} /> Reset</button>
                   </div>
                 </div>
               ) : (
@@ -2813,7 +2810,7 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
                     </thead>
                     <tbody>
                       {qiPdiRefSamples.length === 0 ? (
-                        <tr><td colSpan="3" style={{ ...S.td, textAlign: 'center', color: activeTheme.textMuted }}>No reference checklists found.</td></tr>
+                        <tr><td colSpan="4" style={{ ...S.td, textAlign: 'center', color: activeTheme.textMuted }}>No reference checklists found.</td></tr>
                       ) : (
                         qiPdiRefSamples.map((s) => (
                           <tr key={s.id} style={{ background: activeTheme.surface }}>
@@ -2893,8 +2890,8 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
                                     <td><span className="pill-badge amber">{e.status}</span></td>
                                     <td>
                                       <div style={{ display: 'flex', gap: 8 }}>
-                                        <button className="btn-primary btn-small" style={{ width: 'auto' }} onClick={() => handleFunctionalApprove(e)}>Approve</button>
-                                        <button className="btn-small" style={{ ...S.btn('error'), width: 'auto' }} onClick={() => handleFunctionalReject(e)}>Reject</button>
+                                        <button className="btn-small btn-approve" style={{ width: 'auto' }} onClick={() => handleFunctionalApprove(e)}>Approve</button>
+                                        <button className="btn-small btn-reject" style={{ width: 'auto' }} onClick={() => handleFunctionalReject(e)}>Reject</button>
                                         <button className="btn-small" style={{ ...S.btn('default'), width: 'auto' }} onClick={() => { setReassigningEntry(e); setTargetUser(''); }} title="Reassign">Reassign</button>
                                       </div>
                                     </td>
@@ -2935,8 +2932,8 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
                                     <td><span className="pill-badge amber">{e.status}</span></td>
                                     <td>
                                       <div style={{ display: 'flex', gap: 8 }}>
-                                        <button className="btn-primary btn-small" style={{ width: 'auto' }} onClick={() => handleFunctionalApprove(e)}>Approve</button>
-                                        <button className="btn-small" style={{ ...S.btn('error'), width: 'auto' }} onClick={() => handleFunctionalReject(e)}>Reject</button>
+                                        <button className="btn-small btn-approve" style={{ width: 'auto' }} onClick={() => handleFunctionalApprove(e)}>Approve</button>
+                                        <button className="btn-small btn-reject" style={{ width: 'auto' }} onClick={() => handleFunctionalReject(e)}>Reject</button>
                                         <button className="btn-small" style={{ ...S.btn('default'), width: 'auto' }} onClick={() => { setReassigningEntry(e); setTargetUser(''); }} title="Reassign">Reassign</button>
                                       </div>
                                     </td>
@@ -2956,11 +2953,11 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
 
           {/* ── REASSIGN MODAL ── */}
           {reassigningEntry && (
-            <div style={{ position: 'fixed', inset: 0, zIndex: 1400, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 1400, background: 'var(--overlay-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
               <div style={{ ...S.section, maxWidth: 400, width: '100%', position: 'relative' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                   <div style={{ ...S.sectionTitle, fontSize: 14, marginBottom: 0 }}>Reassign Approval</div>
-                  <button style={{ ...S.btn('default'), padding: '4px 8px', fontSize: 12 }} onClick={() => setReassigningEntry(null)}>✕</button>
+                  <button style={{ ...S.btn('default'), padding: '4px 8px', fontSize: 12 }} onClick={() => setReassigningEntry(null)}><X size={14} /></button>
                 </div>
                 <p style={{ fontSize: 12, color: activeTheme.textMuted, marginBottom: 16 }}>
                   Select a specific individual to handle this approval instead of the generic role.
@@ -2987,9 +2984,9 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
 
           {/* ── GOLDEN SAMPLE PREVIEW MODAL ── */}
           {previewGolden && (
-            <div style={{ position: 'fixed', inset: 0, zIndex: 1300, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 1300, background: 'var(--overlay-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
               <div style={{ ...S.section, maxWidth: 900, width: '100%', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
-                <button style={{ position: 'absolute', top: 15, right: 15, ...S.btn('default'), padding: '5px 10px' }} onClick={() => setPreviewGolden(null)}>✕</button>
+                <button style={{ position: 'absolute', top: 15, right: 15, ...S.btn('default'), padding: '5px 10px' }} onClick={() => setPreviewGolden(null)}><X size={14} /></button>
                 <div style={{ ...S.sectionTitle, fontSize: 16 }}>Configuration Preview: {previewGolden.motorCode}</div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
@@ -3162,7 +3159,7 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
                         style={{ ...S.btn("success"), padding: "8px 16px", fontSize: 11, borderRadius: 20 }}
                         onClick={handleExportMotorLog}
                       >
-                        📊 Export to Excel
+                        <FileSpreadsheet size={14} /> Export to Excel
                       </button>
                     </div>
                   </div>
@@ -3267,7 +3264,7 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
                     </thead>
                     <tbody>
                       {filteredQiPdiReports.length === 0 ? (
-                        <tr><td colSpan="5" style={{ ...S.td, textAlign: 'center', color: activeTheme.textMuted }}>No reports found.</td></tr>
+                        <tr><td colSpan="6" style={{ ...S.td, textAlign: 'center', color: activeTheme.textMuted }}>No reports found.</td></tr>
                       ) : (
                         filteredQiPdiReports.slice().reverse().map((r, i) => (
                           <tr key={r.id} className="table-row-hover">
@@ -3487,8 +3484,8 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
             <div>
               <div style={{ display: "flex", gap: 12, marginBottom: 20, alignItems: "center" }}>
                 <button style={S.btn("default")} onClick={() => setStep(0)}>← Edit Data</button>
-                <button style={S.btn(selectedMotor ? "default" : "default")} disabled={!selectedMotor} onClick={handlePrint}>⎙ Print Report</button>
-                <button style={S.btn(selectedMotor ? "success" : "default")} disabled={!selectedMotor} onClick={handleDownloadPDF}>⬇ Download PDF Report</button>
+                <button style={S.btn(selectedMotor ? "default" : "default")} disabled={!selectedMotor} onClick={handlePrint}><Printer size={14} /> Print Report</button>
+                <button style={S.btn(selectedMotor ? "success" : "default")} disabled={!selectedMotor} onClick={handleDownloadPDF}><Download size={14} /> Download PDF Report</button>
                 <div style={{ flex: 1 }} />
                 <button style={S.btn("primary")} onClick={() => setStep(2)}>
                   {uploadStatus === 'success' ? '✓ Report Uploaded →' : 'Upload Report →'}
@@ -3506,12 +3503,12 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
                 <div style={{ flex: 1 }} />
                 {uploadStatus === 'success' && (
                   <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: activeTheme.success, fontSize: 13, fontWeight: 800 }}>
-                    <span style={{ fontSize: 20 }}>✓</span> Report Uploaded Successfully
+                    <CheckCircle2 size={20} style={{ verticalAlign: 'middle', marginRight: 6 }} />Report Uploaded Successfully
                   </span>
                 )}
                 {uploadStatus === 'error' && (
                   <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: activeTheme.error, fontSize: 13, fontWeight: 800 }}>
-                    <span style={{ fontSize: 20 }}>✗</span> Upload Failed
+                    <XCircle size={20} style={{ verticalAlign: 'middle', marginRight: 6 }} />Upload Failed
                   </span>
                 )}
               </div>
@@ -3537,7 +3534,7 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
                   <input type="file" ref={eolFileRef} accept=".pdf" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleManualEolUpload(f); e.target.value = ''; }} />
                   {uploadStatus === null && (
                     <>
-                      <div style={{ fontSize: 40 }}>📄</div>
+                      <div style={{ color: 'var(--text-sub)', display: 'flex', justifyContent: 'center' }}><FileText size={40} /></div>
                       <div style={{ fontWeight: 700, color: activeTheme.text }}>Ready to Upload</div>
                       <div style={{ fontSize: 12, color: activeTheme.textMuted, maxWidth: 280 }}>
                         Upload the generated report to the traceability system for approval.
@@ -3562,7 +3559,7 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
                   {uploadStatus === 'success' && (
                     <>
                       <div style={{ width: 64, height: 64, borderRadius: '50%', background: activeTheme.success + '20', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ fontSize: 32, color: activeTheme.success }}>✓</span>
+                        <CheckCircle2 size={32} style={{ color: activeTheme.success }} />
                       </div>
                       <div style={{ fontWeight: 700, fontSize: 16, color: activeTheme.success }}>Report Uploaded!</div>
                       <div style={{ fontSize: 12, color: activeTheme.textMuted, maxWidth: 300 }}>
@@ -3577,7 +3574,7 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
                   {uploadStatus === 'error' && (
                     <>
                       <div style={{ width: 64, height: 64, borderRadius: '50%', background: activeTheme.error + '20', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ fontSize: 32, color: activeTheme.error }}>✗</span>
+                        <XCircle size={32} style={{ color: activeTheme.error }} />
                       </div>
                       <div style={{ fontWeight: 700, fontSize: 16, color: activeTheme.error }}>Upload Failed</div>
                       <div style={{ fontSize: 12, color: activeTheme.textMuted, maxWidth: 300 }}>
@@ -3802,7 +3799,7 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
                       }}>
                         Clear Table
                       </button>
-                      <button style={S.btn("success")} onClick={handleSaveQiPdi} disabled={isSaving}>{isSaving ? "Saving..." : "💾 Save & Generate"}</button>
+                      <button style={S.btn("success")} onClick={handleSaveQiPdi} disabled={isSaving}>{isSaving ? "Saving..." : <><Save size={14} /> Save & Generate</>}</button>
                     </div>
                   </div>
                 </div>
@@ -3818,13 +3815,13 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
                         style={S.btn("success")}
                         onClick={() => openQiPdiDownload({ serialNo: form.serialNo, motorModel: form.motorModel, testedBy: form.testedBy, data: qiPdiData, testDate: form.testDate })}
                       >
-                        ⬇ Download PDF
+                        <Download size={14} /> Download PDF
                       </button>
-                      <button style={S.btn("primary")} onClick={() => window.print()}>⎙ Print Report</button>
+                      <button style={S.btn("primary")} onClick={() => window.print()}><Printer size={14} /> Print Report</button>
                       <div style={{ flex: 1 }} />
                       {pdiUploadStatus === 'success' && (
                         <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: activeTheme.success, fontSize: 11, fontWeight: 700 }}>
-                          <span style={{ fontSize: 16 }}>✓</span> Uploaded
+                          <CheckCircle2 size={16} style={{ verticalAlign: 'middle', marginRight: 4 }} />Uploaded
                         </span>
                       )}
                       <button style={S.btn("primary")} onClick={() => setPdiStep(2)}>
@@ -3856,12 +3853,12 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
                       <div style={{ flex: 1 }} />
                       {pdiUploadStatus === 'success' && (
                         <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: activeTheme.success, fontSize: 13, fontWeight: 800 }}>
-                          <span style={{ fontSize: 20 }}>✓</span> Report Uploaded Successfully
+                          <CheckCircle2 size={20} style={{ verticalAlign: 'middle', marginRight: 6 }} />Report Uploaded Successfully
                         </span>
                       )}
                       {pdiUploadStatus === 'error' && (
                         <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: activeTheme.error, fontSize: 13, fontWeight: 800 }}>
-                          <span style={{ fontSize: 20 }}>✗</span> Upload Failed
+                          <XCircle size={20} style={{ verticalAlign: 'middle', marginRight: 6 }} />Upload Failed
                         </span>
                       )}
                     </div>
@@ -3887,7 +3884,7 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
                         <input type="file" ref={pdiFileRef} accept=".pdf" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleManualPdiUpload(f); e.target.value = ''; }} />
                         {pdiUploadStatus === null && (
                           <>
-                            <div style={{ fontSize: 40 }}>📄</div>
+                            <div style={{ color: 'var(--text-sub)', display: 'flex', justifyContent: 'center' }}><FileText size={40} /></div>
                             <div style={{ fontWeight: 700, color: activeTheme.text }}>Ready to Upload</div>
                             <div style={{ fontSize: 12, color: activeTheme.textMuted, maxWidth: 280 }}>
                               Upload the PDI report to the traceability system for approval.
@@ -3912,7 +3909,7 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
                         {pdiUploadStatus === 'success' && (
                           <>
                             <div style={{ width: 64, height: 64, borderRadius: '50%', background: activeTheme.success + '20', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <span style={{ fontSize: 32, color: activeTheme.success }}>✓</span>
+                              <CheckCircle2 size={32} style={{ color: activeTheme.success }} />
                             </div>
                             <div style={{ fontWeight: 700, fontSize: 16, color: activeTheme.success }}>PDI Report Uploaded!</div>
                             <div style={{ fontSize: 12, color: activeTheme.textMuted, maxWidth: 300 }}>
@@ -3927,7 +3924,7 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
                         {pdiUploadStatus === 'error' && (
                           <>
                             <div style={{ width: 64, height: 64, borderRadius: '50%', background: activeTheme.error + '20', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <span style={{ fontSize: 32, color: activeTheme.error }}>✗</span>
+                              <XCircle size={32} style={{ color: activeTheme.error }} />
                             </div>
                             <div style={{ fontWeight: 700, fontSize: 16, color: activeTheme.error }}>Upload Failed</div>
                             <div style={{ fontSize: 12, color: activeTheme.textMuted, maxWidth: 300 }}>

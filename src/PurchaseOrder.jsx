@@ -8,35 +8,10 @@ import {
 } from 'lucide-react';
 import { API_BASE_URL } from "./constants";
 import { FilterSection, FilterInput, FilterSelect, FilterDateInput } from './components/ui';
+import { formatDate } from './utils/formatDate';
+import { CURRENCY_DATA } from './utils/currency';
+import { getStatusVariant, STEPPER_COLORS } from './utils/statusColors';
 
-const formatDate = (dateInput) => {
-  if (!dateInput) return 'N/A';
-  const date = new Date(dateInput);
-  if (isNaN(date.getTime())) return dateInput;
-  const day = date.getDate();
-  const month = date.toLocaleString('default', { month: 'long' }).toUpperCase();
-  const year = date.getFullYear();
-  const getOrdinal = (d) => {
-    if (d > 3 && d < 21) return d + 'th';
-    switch (d % 10) { case 1: return d + 'st'; case 2: return d + 'nd'; case 3: return d + 'rd'; default: return d + 'th'; }
-  };
-  return `${getOrdinal(day)} ${month} ${year}`;
-};
-
-const CURRENCY_DATA = [
-  { code: "INR", symbol: "₹" }, { code: "USD", symbol: "$" }, { code: "EUR", symbol: "€" },
-  { code: "GBP", symbol: "£" }, { code: "JPY", symbol: "¥" }, { code: "AUD", symbol: "A$" },
-  { code: "CAD", symbol: "C$" }, { code: "CHF", symbol: "Fr" }, { code: "CNY", symbol: "¥" },
-  { code: "SGD", symbol: "S$" }, { code: "HKD", symbol: "HK$" }, { code: "NZD", symbol: "NZ$" },
-  { code: "AED", symbol: "د.إ" }, { code: "SAR", symbol: "﷼" }, { code: "KRW", symbol: "₩" },
-  { code: "RUB", symbol: "₽" }, { code: "ZAR", symbol: "R" }, { code: "BRL", symbol: "R$" },
-  { code: "TRY", symbol: "₺" }, { code: "SEK", symbol: "kr" }, { code: "NOK", symbol: "kr" },
-  { code: "DKK", symbol: "kr" }, { code: "PLN", symbol: "zł" }, { code: "THB", symbol: "฿" },
-  { code: "IDR", symbol: "Rp" }, { code: "MYR", symbol: "RM" }, { code: "PHP", symbol: "₱" },
-  { code: "VND", symbol: "₫" }, { code: "MXN", symbol: "$" }
-];
-
-const BRAND = '#c36e46';
 const CHART_STAGE_COLORS = ['#c36e46', '#f59e0b', '#3b82f6', '#10b981'];
 const CHART_PROGRAM_COLORS = ['#c36e46', '#6366f1', '#ec4899', '#14b8a6', '#f97316'];
 
@@ -54,13 +29,13 @@ const StatusStepper = ({ status }) => {
   return (
     <div className="status-stepper-container" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center' }} aria-label={`Current status: ${status}`}>
       {stages.map((stage, i) => {
-        let nodeColor = 'var(--border)';
+        let nodeColor = STEPPER_COLORS.idle;
         let iconColor = 'var(--text-sub)';
-        if (i < currentIndex || status === 'Approved') { nodeColor = 'var(--emerald-text)'; iconColor = '#ffffff'; }
+        if (i < currentIndex || status === 'Approved') { nodeColor = STEPPER_COLORS.done; iconColor = STEPPER_COLORS.iconOn; }
         else if (i === currentIndex) {
-          if (isCorrection) { nodeColor = 'var(--amber-text)'; iconColor = '#ffffff'; }
-          else { nodeColor = BRAND; iconColor = '#ffffff'; }
-        } else if (isTerminal) { nodeColor = 'var(--rose-text)'; iconColor = '#ffffff'; }
+          if (isCorrection) { nodeColor = STEPPER_COLORS.correction; iconColor = STEPPER_COLORS.iconOn; }
+          else { nodeColor = STEPPER_COLORS.active; iconColor = STEPPER_COLORS.iconOn; }
+        } else if (isTerminal) { nodeColor = STEPPER_COLORS.terminal; iconColor = STEPPER_COLORS.iconOn; }
         return (
           <div key={i} style={{ display: 'flex', alignItems: 'center' }}>
             <div
@@ -359,6 +334,8 @@ const PurchaseOrder = ({
     const allData = JSON.parse(localStorage.getItem('arpl_data') || '{}');
     allData.vendors = updated;
     localStorage.setItem('arpl_data', JSON.stringify(allData));
+    // Persist to the server so additions survive a refresh
+    if (syncToDisk) syncToDisk({ key: 'vendors', data: updated });
   };
 
   const syncParts = (updated) => {
@@ -367,6 +344,8 @@ const PurchaseOrder = ({
     const allData = JSON.parse(localStorage.getItem('arpl_data') || '{}');
     allData.parts = updated;
     localStorage.setItem('arpl_data', JSON.stringify(allData));
+    // Persist to the server so additions survive a refresh
+    if (syncToDisk) syncToDisk({ key: 'parts', data: updated });
   };
 
   const handleSaveVendor = () => {
@@ -923,7 +902,7 @@ const PurchaseOrder = ({
                   <td>{vendors.find(v => String(v.id) === String(req.vendorId))?.name || req.vendorId || 'N/A'}</td>
                   <td><StatusStepper status={req.status} /></td>
                   <td>
-                    <span className={`pill-badge ${req.status.includes('Pending') ? 'amber' : req.status === 'Approved' ? 'emerald' : 'rose'}`}>{req.status}</span>
+                    <span className={`pill-badge ${getStatusVariant(req.status)}`}>{req.status}</span>
                     {(() => { const ri = getReassignedInfo(req); return ri ? <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--accent)', marginTop: 'var(--space-xs)', fontWeight: '600' }}>Reassigned to: {ri.username} ({ri.role})</div> : null; })()}
                   </td>
                   <td className="text-right">
@@ -1023,7 +1002,7 @@ const PurchaseOrder = ({
                     <td>{req.programName}</td>
                     <td>{vendors.find(v => String(v.id) === String(req.vendorId))?.name || req.vendorId || 'N/A'}</td>
                     <td>{(() => { const currency = (req.items && req.items[0]?.currency) || 'INR'; const symbol = CURRENCY_DATA.find(c => c.code === currency)?.symbol || '₹'; const amount = req.items ? req.items.reduce((sum, i) => sum + (Number(i.qty || 0) * Number(i.unitPrice || 0)), 0) : (Number(req.qty || 0) * Number(req.unitPrice || 0)); return `${symbol}${amount.toLocaleString()}`; })()}</td>
-                    <td><span className={`pill-badge ${req.status === 'Approved' ? 'emerald' : req.status.includes('Pending') ? 'amber' : 'rose'}`}>{req.status}</span></td>
+                    <td><span className={`pill-badge ${getStatusVariant(req.status)}`}>{req.status}</span></td>
                     <td className="text-right"><div style={{ display: 'flex', gap: 'var(--space-xs)', justifyContent: 'flex-end' }}>
                       <button className="btn-icon-only" onClick={() => setViewingRequestDetails(req)} title="View Summary & History"><Eye size={16} /></button>
                       {req.fileName && <button className="btn-icon-only success" onClick={() => handleFileDownload(req.fileName)} title="Download Quotation"><FileText size={16} /></button>}
@@ -1051,7 +1030,7 @@ const PurchaseOrder = ({
                   <p style={{ margin: 'var(--space-xs) 0 0 0', fontSize: 'var(--fs-base)', color: 'var(--text-sub)' }}>Ref ID: <span style={{ color: 'var(--accent)', fontWeight: '600' }}>{reviewingRequest.refId || reviewingRequest.id}</span> • Submitted on {formatDate(reviewingRequest.createdAt)}</p>
                 </div>
                 <div style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'center' }}>
-                  <span className={`pill-badge ${reviewingRequest.status.includes('Pending') ? 'amber' : 'emerald'}`} style={{ padding: 'var(--space-xs) var(--space-md)', fontSize: 'var(--fs-md)' }}>{reviewingRequest.status}</span>
+                  <span className={`pill-badge ${getStatusVariant(reviewingRequest.status)}`} style={{ padding: 'var(--space-xs) var(--space-md)', fontSize: 'var(--fs-md)' }}>{reviewingRequest.status}</span>
                   <button className="btn-icon-only" onClick={() => setReviewingRequest(null)} title="Close"><X size={18} /></button>
                 </div>
               </div>
@@ -1180,9 +1159,9 @@ const PurchaseOrder = ({
                   <div className="form-actions" style={{ display: 'flex', gap: 'var(--space-sm)', justifyContent: 'flex-end', marginTop: 'var(--space-lg)' }}>
                     <button className="btn-secondary" style={{ padding: '0.6rem var(--space-lg)' }} onClick={() => setReviewingRequest(null)}>Discard Changes</button>
                     {!isReassigning && <button className="btn-secondary" style={{ padding: '0.6rem var(--space-lg)', borderColor: 'var(--accent)', color: 'var(--accent)' }} onClick={() => setIsReassigning(true)}>Reassign Workflow</button>}
-                    <button className="btn-secondary destructive" style={{ padding: '0.6rem var(--space-lg)' }} onClick={() => handleWorkflowAction(reviewingRequest.id, 'reject', reviewingRequest.reviewRemarks)}>Reject Application</button>
-                    <button className="btn-secondary" style={{ padding: '0.6rem var(--space-lg)', borderColor: 'var(--amber-text)', color: 'var(--amber-text)' }} onClick={() => handleWorkflowAction(reviewingRequest.id, 'rollback', reviewingRequest.reviewRemarks)}>Return for Correction</button>
-                    <button className="btn-primary" style={{ background: 'var(--emerald-text)', color: '#fff', width: 'auto', padding: '0.6rem var(--space-xl)' }}
+                    <button className="btn-action btn-reject" onClick={() => handleWorkflowAction(reviewingRequest.id, 'reject', reviewingRequest.reviewRemarks)}>Reject Application</button>
+                    <button className="btn-action btn-correction" onClick={() => handleWorkflowAction(reviewingRequest.id, 'rollback', reviewingRequest.reviewRemarks)}>Return for Correction</button>
+                    <button className="btn-action btn-approve"
                       onClick={() => handleWorkflowAction(reviewingRequest.id, 'approve', reviewingRequest.reviewRemarks, { programName: reviewingRequest.programName, workOrderId: reviewingRequest.workOrderId, budgetCode: reviewingRequest.budgetCode, poFile: reviewingRequest.poFile })}>
                       {['Pending Head', 'Pending Program Head'].includes(reviewingRequest.status) ? 'Authorize & Close' : 'Approve & Forward'}
                     </button>
@@ -1197,7 +1176,7 @@ const PurchaseOrder = ({
       <AnimatePresence>
         {viewingRequestDetails && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0, 0, 0, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)', padding: 'var(--space-lg)' }}>
+            className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'var(--overlay-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)', padding: 'var(--space-lg)' }}>
             <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }}
               className="card modal-content" style={{ maxWidth: '950px', width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: '0', background: 'var(--bg-card)', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
               <div style={{ padding: 'var(--space-lg) var(--space-xl)', borderBottom: '1px solid var(--border)', background: 'linear-gradient(135deg, var(--accent-bg), transparent 70%)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

@@ -3,36 +3,9 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PieChart, Plus, FileText, CheckCircle2, FileUp, DollarSign, MessageSquare, Info, Download, ClipboardList, Layers, Search, CreditCard, Trash2, History, Clock, X, Briefcase, Users, Eye, Printer, ChevronUp, ChevronDown } from 'lucide-react';
 import { API_BASE_URL } from "./constants";
-
-const CURRENCIES = [
-  { code: 'INR', symbol: '₹' },
-  { code: 'USD', symbol: '$' },
-  { code: 'EUR', symbol: '€' }
-];
-
-const getCurrencySymbol = (code) => CURRENCIES.find(c => c.code === code)?.symbol || '₹';
-
-const formatDate = (dateInput) => {
-  if (!dateInput) return 'N/A';
-  const date = new Date(dateInput);
-  if (isNaN(date.getTime())) return dateInput;
-
-  const day = date.getDate();
-  const month = date.toLocaleString('default', { month: 'long' }).toUpperCase();
-  const year = date.getFullYear();
-
-  const getOrdinal = (d) => {
-    if (d > 3 && d < 21) return d + 'th';
-    switch (d % 10) {
-      case 1: return d + 'st';
-      case 2: return d + 'nd';
-      case 3: return d + 'rd';
-      default: return d + 'th';
-    }
-  };
-
-  return `${getOrdinal(day)} ${month} ${year}`;
-};
+import { formatDate } from './utils/formatDate';
+import { getCurrencySymbol } from './utils/currency';
+import { getStatusVariant } from './utils/statusColors';
 
 /**
  * PurchaseOrderProduction Component
@@ -743,7 +716,7 @@ const PurchaseOrderProduction = ({ programs = [], workOrders = [], registeredUse
                             ) : <span style={{ fontSize: 'var(--fs-base)', color: 'var(--text-sub)' }}>No file</span>}
                           </td>
                           <td>
-                            <span className={`pill-badge ${req.status === 'Approved' ? 'emerald' : 'amber'}`}>{req.status}</span>
+                            <span className={`pill-badge ${getStatusVariant(req.status)}`}>{req.status}</span>
                             {(() => {
                               const reassignedInfo = getReassignedInfo(req);
                               return reassignedInfo ? (
@@ -1116,7 +1089,7 @@ const PurchaseOrderProduction = ({ programs = [], workOrders = [], registeredUse
                   if (req.status === 'Pending Program Head') return roles.includes('Program Head');
                   return false;
                 }).length === 0 && (
-                    <tr><td colSpan="4" className="empty-msg">No pending production approvals for your role.</td></tr>
+                    <tr><td colSpan="6" className="empty-msg">No pending production approvals for your role.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -1131,7 +1104,7 @@ const PurchaseOrderProduction = ({ programs = [], workOrders = [], registeredUse
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="modal-overlay"
-            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)', padding: 'var(--space-lg)' }}
+            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'var(--overlay-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)', padding: 'var(--space-lg)' }}
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }}
@@ -1167,7 +1140,7 @@ const PurchaseOrderProduction = ({ programs = [], workOrders = [], registeredUse
                     else if (currentIdx > idx) state = 'completed';
                     else if (currentIdx === idx) state = 'active';
 
-                    const colors = { completed: '#10b981', active: 'var(--accent)', upcoming: 'var(--border)' };
+                    const colors = { completed: 'var(--emerald-text)', active: 'var(--accent)', upcoming: 'var(--border)' };
 
                     return (
                       <div key={idx} style={{ flex: 1, textAlign: 'center', position: 'relative' }}>
@@ -1321,11 +1294,10 @@ const PurchaseOrderProduction = ({ programs = [], workOrders = [], registeredUse
                         <div className="form-actions" style={{ display: 'flex', gap: 'var(--space-md)', justifyContent: 'flex-end', marginTop: 'var(--space-lg)' }}>
                           <button className="btn-small" onClick={() => { setViewingRequest(null); setReviewRemarks(''); }}>Cancel</button>
                           {!isReassigning && <button className="btn-small" style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }} onClick={() => setIsReassigning(true)}>Reassign</button>}
-                          <button className="btn-small destructive" onClick={() => { handleWorkflowAction(viewingRequest.id, 'reject', reviewRemarks); setViewingRequest(null); }}>Reject</button>
-                          <button className="btn-small" style={{ borderColor: 'var(--amber-text)', color: 'var(--amber-text)' }} onClick={() => { handleWorkflowAction(viewingRequest.id, 'rollback', reviewRemarks); setViewingRequest(null); }}>Request Correction</button>
+                          <button className="btn-action btn-reject" onClick={() => { handleWorkflowAction(viewingRequest.id, 'reject', reviewRemarks); setViewingRequest(null); }}>Reject</button>
+                          <button className="btn-action btn-correction" onClick={() => { handleWorkflowAction(viewingRequest.id, 'rollback', reviewRemarks); setViewingRequest(null); }}>Request Correction</button>
                           <button
-                            className="btn-primary"
-                            style={{ background: 'var(--emerald-text)', color: '#fff', width: 'auto', padding: '0.6rem 2rem' }}
+                            className="btn-action btn-approve"
                             onClick={() => { handleWorkflowAction(viewingRequest.id, 'approve', reviewRemarks); setViewingRequest(null); }}
                           >
                             {viewingRequest.status === 'Pending Program Head' ? 'Authorize & Close' : 'Approve & Forward'}

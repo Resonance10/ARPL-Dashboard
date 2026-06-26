@@ -28,6 +28,12 @@
   --blue-text: #1e40af;
   --gray-bg: #f0efed;
   --gray-text: #78716c;
+  /* Semantic aliases (single source of truth for status colors) */
+  --emerald: var(--emerald-text);
+  --success: var(--emerald-text);
+  --warning: var(--amber-text);
+  --error: var(--rose-text);
+  --text-sub-rgb: 120, 113, 108;
   --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
   --shadow-md: 0 6px 18px rgba(0,0,0,0.06);
@@ -60,6 +66,12 @@
   --blue-text: #93a8f5;
   --gray-bg: #1c1917;
   --gray-text: #a8a29e;
+  /* Semantic aliases (single source of truth for status colors) */
+  --emerald: var(--emerald-text);
+  --success: var(--emerald-text);
+  --warning: var(--amber-text);
+  --error: var(--rose-text);
+  --text-sub-rgb: 168, 162, 158;
   --shadow-xs: 0 1px 2px rgba(0,0,0,0.18);
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.24);
   --shadow-md: 0 6px 18px rgba(0,0,0,0.32);
@@ -1079,11 +1091,11 @@ textarea {
   z-index: 2;
   transition: background 0.2s;
 }
-.notif-status-dot.granted { background: #22c55e; }
-.notif-status-dot.denied  { background: #ef4444; }
+.notif-status-dot.granted { background: var(--emerald-text); }
+.notif-status-dot.denied  { background: var(--rose-text); }
 .notif-status-dot.default,
-.notif-status-dot.loading { background: #f59e0b; }
-.notif-status-dot.unsupported { background: #6b7280; }
+.notif-status-dot.loading { background: var(--amber-text); }
+.notif-status-dot.unsupported { background: var(--gray-text); }
 
 .notification-panel {
   position: absolute;
@@ -1706,6 +1718,58 @@ textarea {
   border-color: var(--emerald-text);
 }
 
+/* ─── Workflow action buttons ──────────────────────────────────────
+   Consistent approve / reject / correction styling across every
+   approval screen. Color modifiers compose onto .btn-action (prominent,
+   for modals) or onto .btn-small (compact, for table rows). */
+.btn-action {
+  width: auto;
+  padding: 0.6rem var(--space-xl);
+  border-radius: var(--btn-radius, var(--radius-md));
+  border: 1px solid transparent;
+  font-size: var(--fs-md);
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: transform 0.2s, box-shadow 0.25s, background 0.15s, opacity 0.2s;
+  white-space: nowrap;
+}
+.btn-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-approve {
+  background: var(--emerald-text);
+  border-color: var(--emerald-text);
+  color: #fff;
+}
+.btn-approve:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(var(--emerald-rgb), 0.3);
+}
+.btn-reject {
+  background: transparent;
+  border-color: var(--rose-text);
+  color: var(--rose-text);
+}
+.btn-reject:hover {
+  background: var(--rose-bg);
+}
+.btn-correction {
+  background: transparent;
+  border-color: var(--amber-text);
+  color: var(--amber-text);
+}
+.btn-correction:hover {
+  background: var(--amber-bg);
+}
+
 .btn-icon {
   width: 34px;
   height: 34px;
@@ -1852,7 +1916,7 @@ textarea {
 
 .bar-chart-wrapper .bar.planned { background: var(--accent); opacity: 0.6; }
 .bar-chart-wrapper .bar.actual { background: var(--accent); }
-.bar-chart-wrapper .bar.actual.delay { background: #ef4444; }
+.bar-chart-wrapper .bar.actual.delay { background: var(--rose-text); }
 
 .bar-chart-wrapper .month-label {
   font-size: 0.65rem;
@@ -2135,7 +2199,7 @@ textarea {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--overlay-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2463,7 +2527,7 @@ textarea {
 .toast-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--overlay-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2635,11 +2699,11 @@ textarea {
 }
 
 .strength-bar.weak {
-  background: #f59e0b;
+  background: var(--amber-text);
 }
 
 .strength-bar.strong {
-  background: #10b981;
+  background: var(--emerald-text);
 }
 
 .strength-label {
@@ -2836,7 +2900,7 @@ textarea {
 .overlay-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--overlay-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2919,10 +2983,10 @@ textarea {
   box-shadow: var(--shadow-sm);
 }
 
-/* Dark tooltip */
+/* High-contrast tooltip — inverts against the current theme so it stays readable in both modes */
 [data-tooltip-style="dark"]::after {
-  background: #1c1917;
-  color: #f5f5f4;
+  background: var(--text-h);
+  color: var(--bg-card);
   box-shadow: var(--shadow-md);
 }
 
@@ -3162,15 +3226,13 @@ input[type="radio"] {
   /* Modal */
   --modal-radius: 12px;
   --modal-backdrop-blur: blur(4px);
+  --overlay-bg: rgba(0, 0, 0, 0.55);
 
-  /* Status colors (fallback defaults) */
-  --emerald-text: #10b981;
+  /* Status RGB helpers (the *-text colors themselves are theme-scoped above,
+     and must NOT be redefined here or they would override the dark-mode values). */
   --emerald-rgb: 16, 185, 129;
-  --amber-text: #f59e0b;
   --amber-rgb: 245, 158, 11;
-  --rose-text: #ef4444;
   --rose-rgb: 239, 68, 68;
-  --blue-text: #3b82f6;
   --blue-rgb: 59, 130, 246;
 
   /* Forms */

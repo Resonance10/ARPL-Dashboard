@@ -129,7 +129,7 @@ const ThemeConfigurator = ({ isOpen, onClose }) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 9998, backdropFilter: 'blur(4px)' }}
+            style={{ position: 'fixed', inset: 0, background: 'var(--overlay-bg)', zIndex: 9998, backdropFilter: 'blur(4px)' }}
             onClick={onClose}
           />
           <motion.div

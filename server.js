@@ -430,6 +430,14 @@ app.post('/api/reports', eolUpload.fields([
         else if (req.body.metadata) metadata = JSON.parse(req.body.metadata);
         else throw new Error('No metadata or report field found in request');
 
+        // Reject non-object payloads and strip server-controlled keys so a client
+        // cannot override id/files/timestamps or inject arbitrary nested structures.
+        if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) {
+            throw new Error('Report metadata must be an object');
+        }
+        const RESERVED_KEYS = ['id', 'files', 'timestamp', 'torqueSpeedFilePresent', 'backEmfFilePresent'];
+        RESERVED_KEYS.forEach(k => { delete metadata[k]; });
+
         const newReport = {
             id: Date.now(),
             ...metadata,
