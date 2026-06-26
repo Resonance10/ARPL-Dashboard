@@ -1033,6 +1033,12 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
   const [approvalTab, setApprovalTab] = useState("eol"); // 'eol' or 'pdi'
   const [reassigningEntry, setReassigningEntry] = useState(null);
   const [targetUser, setTargetUser] = useState('');
+  const eolFormSnapshot = useRef(null);
+  const eolPpDataSnapshot = useRef([]);
+  const eolBemfDataSnapshot = useRef([]);
+  const eolTorqueAdjSnapshot = useRef("");
+  const pdiFormSnapshot = useRef(null);
+  const pdiQiPdiDataSnapshot = useRef([]);
   const [pendingDownloadMotor, setPendingDownloadMotor] = useState(null);
   const [filterSerial, setFilterSerial] = useState("");
   const [filterModel, setFilterModel] = useState("");
@@ -1060,12 +1066,57 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
     if (siteTheme) setTheme(siteTheme);
   }, [siteTheme]);
 
+  const saveCurrentViewData = () => {
+    if (view === 'new_report') {
+      eolFormSnapshot.current = form;
+      eolPpDataSnapshot.current = ppData;
+      eolBemfDataSnapshot.current = bemfData;
+      eolTorqueAdjSnapshot.current = torqueAdj;
+    } else if (view === 'qi_pdi_report') {
+      const identityFields = { programName: form.programName, motorCode: form.motorCode, motorModel: form.motorModel, serialNo: form.serialNo, testDate: form.testDate, testedBy: form.testedBy };
+      pdiFormSnapshot.current = identityFields;
+      pdiQiPdiDataSnapshot.current = qiPdiData;
+    }
+  };
+
+  const restoreViewData = (targetView) => {
+    if (targetView === 'new_report') {
+      if (eolFormSnapshot.current) {
+        setForm(eolFormSnapshot.current);
+        setPpData(eolPpDataSnapshot.current);
+        setBemfData(eolBemfDataSnapshot.current);
+        setTorqueAdj(eolTorqueAdjSnapshot.current);
+      } else {
+        setForm({...INITIAL_FORM});
+      }
+      setSelectedMotor(null);
+      setStep(0);
+    } else if (targetView === 'qi_pdi_report') {
+      if (pdiFormSnapshot.current) {
+        setForm(f => ({ ...f, ...pdiFormSnapshot.current }));
+        setQiPdiData(pdiQiPdiDataSnapshot.current);
+      } else {
+        setForm(f => ({ ...f, programName: "", motorCode: "", motorModel: "", serialNo: "", testDate: "", testedBy: "" }));
+        setQiPdiData(QI_PDI_DEFAULTS.map(i => ({...i, status: ""})));
+      }
+      setPdiStep(0);
+      setPdiUploadStatus(null);
+    }
+  };
+
   useEffect(() => {
-    if (embeddedView && embeddedView !== view) setView(embeddedView);
+    if (embeddedView && embeddedView !== view) {
+      saveCurrentViewData();
+      setView(embeddedView);
+      restoreViewData(embeddedView);
+    }
   }, [embeddedView, view]);
 
   const updateView = (nextView) => {
+    if (nextView === view) return;
+    saveCurrentViewData();
     setView(nextView);
+    restoreViewData(nextView);
     if (onEmbeddedViewChange) onEmbeddedViewChange(nextView);
   };
 
@@ -2344,7 +2395,7 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
           {showValidationSection && (
             <>
               {userPerms.validation.report !== "none" && (
-                <button style={{ ...S.sideBtn(view === 'new_report'), padding: '6px 12px', fontSize: 11, borderRadius: 6 }} onClick={() => { updateView('new_report'); setSelectedMotor(null); setStep(0); }}>
+                <button style={{ ...S.sideBtn(view === 'new_report'), padding: '6px 12px', fontSize: 11, borderRadius: 6 }} onClick={() => updateView('new_report')}>
                   <NavIcon type="new" color={view === 'new_report' ? activeTheme.primary : activeTheme.textMuted} /> EOL Report
                 </button>
               )}
@@ -2363,7 +2414,7 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
           {showQiPdiSection && (
             <>
               {userPerms.qipdi.report !== "none" && (
-                <button style={{ ...S.sideBtn(view === 'qi_pdi_report'), padding: '6px 12px', fontSize: 11, borderRadius: 6 }} onClick={() => { updateView('qi_pdi_report'); setPdiStep(0); setPdiUploadStatus(null); }}>
+                <button style={{ ...S.sideBtn(view === 'qi_pdi_report'), padding: '6px 12px', fontSize: 11, borderRadius: 6 }} onClick={() => updateView('qi_pdi_report')}>
                   <NavIcon type="qi" color={view === 'qi_pdi_report' ? activeTheme.primary : activeTheme.textMuted} /> PDI Report
                 </button>
               )}
