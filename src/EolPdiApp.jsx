@@ -7,6 +7,7 @@ import {
 } from "recharts";
 import logo from "./logo.webp";
 const arLogo = "/AR LOGO.png";
+import { CheckCircle2 } from "lucide-react";
 import { API_BASE_URL } from "./constants";
 
 // Shared html2pdf options
@@ -27,6 +28,16 @@ const PDF_OPTS_PDI = {
 
 const NOT_IMPACTED_STATUS = "NOT OK, But Motor Performance Not Impacted";
 const BEMF_SPEEDS = [500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500];
+const TARGET_SPEEDS = [500, 1000, 3000, 7000];
+const INITIAL_FORM = {
+  programName: "", motorCode: "", motorModel: "",
+  serialNo: "", testDate: "", testedBy: "",
+  hipotU: "", hipotV: "", hipotW: "",
+  irU: "", irV: "", irW: "",
+  resU: "", resV: "", resW: "",
+  sineMin: "", sineMax: "", cosMin: "", cosMax: "", sinePP: "", cosPP: "", offset: "766",
+  workOrderId: "", itemIdx: "",
+};
 const QI_PDI_DEFAULTS = [
   { no: 1, desc: "Spigot Seat", spec: "154,90 (0,00/-0,03) mm", method: "OD Snap gauge" },
   { no: 2, desc: "Front Mounting Thread", spec: "3x M6x1 - 6H, l 18,00 mm", method: "Plug gauge check found OK" },
@@ -966,6 +977,12 @@ const NavIcon = ({ type, color }) => {
         <polyline points="22 4 12 14.01 9 11.01"></polyline>
       </svg>
     );
+    case 'approvals': return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <polyline points="9 12 11 14 15 10"></polyline>
+      </svg>
+    );
     default: return null;
   }
 };
@@ -1002,7 +1019,7 @@ const SectionIcon = ({ type, color }) => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-export default function EolPdiApp({ user, workOrders = [], programs = [], traceabilityData = [], setTraceabilityData, syncToDisk, showToast, addNotification, goldenSamples = [], setGoldenSamples, qiPdiRefSamples = [], setQiPdiRefSamples, theme: siteTheme = "light", embedded = false, embeddedView, onEmbeddedViewChange }) {
+export default function EolPdiApp({ user, workOrders = [], programs = [], traceabilityData = [], setTraceabilityData, syncToDisk, showToast, addNotification, goldenSamples = [], setGoldenSamples, qiPdiRefSamples = [], setQiPdiRefSamples, registeredUsers = [], theme: siteTheme = "light", embedded = false, embeddedView, onEmbeddedViewChange }) {
   const [step, setStep] = useState(0);
   const [theme, setTheme] = useState(siteTheme);
   const currentUser = user;
@@ -1013,6 +1030,9 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [archiveSubTab, setArchiveSubTab] = useState("summary"); // 'summary' or 'log'
   const [archiveMode, setArchiveMode] = useState("eol"); // 'eol' or 'pdi'
+  const [approvalTab, setApprovalTab] = useState("eol"); // 'eol' or 'pdi'
+  const [reassigningEntry, setReassigningEntry] = useState(null);
+  const [targetUser, setTargetUser] = useState('');
   const [pendingDownloadMotor, setPendingDownloadMotor] = useState(null);
   const [filterSerial, setFilterSerial] = useState("");
   const [filterModel, setFilterModel] = useState("");
@@ -1031,6 +1051,8 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
   const reportRef = useRef(null);
   const hiddenEolRef = useRef(null);
   const hiddenPdiRef = useRef(null);
+  const eolFileRef = useRef(null);
+  const pdiFileRef = useRef(null);
   const activeTheme = useMemo(() => resolveThemeFromCSS(), [theme]);
   const S = useMemo(() => getStyles(activeTheme), [activeTheme]);
 
@@ -1287,15 +1309,7 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
   // ────────────────────────────────────────────────────────────────────────
 
   // Manual fields
-  const [form, setForm] = useState({
-    programName: "", motorCode: "", motorModel: "",
-    serialNo: "", testDate: "", testedBy: "",
-    hipotU: "", hipotV: "", hipotW: "",
-    irU: "", irV: "", irW: "",
-    resU: "", resV: "", resW: "",
-    sineMin: "", sineMax: "", cosMin: "", cosMax: "", sinePP: "", cosPP: "", offset: "",
-    workOrderId: "", itemIdx: "",
-  });
+  const [form, setForm] = useState({ ...INITIAL_FORM });
   const F = (k) => (v) => setForm(f => {
     const next = { ...f, [k]: v };
     if (k === "sineMin" || k === "sineMax") {
@@ -1366,6 +1380,15 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
     }
   };
 
+  const handleProgramChange = (progName) => {
+    setForm(f => ({
+      ...f,
+      programName: progName,
+      motorModel: "",
+      motorCode: "",
+    }));
+  };
+
   // Compute unique model+part combinations across all work orders
   const uniqueModelPartOptions = useMemo(() => {
     const seen = new Set();
@@ -1399,68 +1422,12 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
     }
   }, []);
 
-  // Auto-upload EOL report PDF to traceability when step 1 renders the report
-  useEffect(() => {
-    if (pendingUpload?.type === 'EOL' && step === 1 && reportRef.current) {
-      setUploadStatus('uploading');
-      (async () => {
-        try {
-          const opt = { ...PDF_OPTS_EOL, filename: `EOL_Report_${form.serialNo || "Motor"}.pdf` };
-          const blob = await html2pdf().from(reportRef.current).set(opt).outputPdf('blob');
-          const formData = new FormData();
-          formData.append('file', blob, `EOL_Report_${form.serialNo || "Motor"}.pdf`);
-          const uploadRes = await fetch(`${API_BASE_URL}/api/upload`, { method: 'POST', body: formData });
-          const uploadData = await uploadRes.json();
-          if (uploadData.fileName) {
-            const updated = traceabilityData.map(e =>
-              e.id === pendingUpload.id ? { ...e, eolReport: uploadData.fileName } : e
-            );
-            setTraceabilityData(updated);
-            syncToDisk({ key: 'traceability', data: updated });
-            setUploadStatus('success');
-          } else {
-            setUploadStatus('error');
-          }
-        } catch (err) { console.error('EOL PDF auto-upload failed:', err); setUploadStatus('error'); }
-        setPendingUpload(null);
-      })();
-    }
-  }, [pendingUpload, step, reportRef.current]);
 
-  // Auto-upload PDI report PDF to traceability when hidden ref is ready
-  useEffect(() => {
-    if (pendingUpload?.type === 'PDI' && hiddenPdiRef.current) {
-      setPdiUploadStatus('uploading');
-      (async () => {
-        try {
-          const opt = { ...PDF_OPTS_PDI, filename: `QI_PDI_Report_${form.serialNo || "Motor"}.pdf` };
-          const blob = await html2pdf().from(hiddenPdiRef.current).set(opt).outputPdf('blob');
-          const formData = new FormData();
-          formData.append('file', blob, `QI_PDI_Report_${form.serialNo || "Motor"}.pdf`);
-          const uploadRes = await fetch(`${API_BASE_URL}/api/upload`, { method: 'POST', body: formData });
-          const uploadData = await uploadRes.json();
-          if (uploadData.fileName) {
-            const updated = traceabilityData.map(e =>
-              e.id === pendingUpload.id ? { ...e, pdiReport: uploadData.fileName } : e
-            );
-            setTraceabilityData(updated);
-            syncToDisk({ key: 'traceability', data: updated });
-            setPdiUploadStatus('success');
-          } else {
-            setPdiUploadStatus('error');
-          }
-        } catch (err) { console.error('PDI PDF auto-upload failed:', err); setPdiUploadStatus('error'); }
-        setPendingUpload(null);
-      })();
-    }
-  }, [pendingUpload, hiddenPdiRef.current]);
 
-  // Fetch QI/PDI reports whenever the view switches to Archive or on mount
+  // Fetch QI/PDI reports on mount and whenever the view switches to Archive
   useEffect(() => {
-    if (view === 'archive') {
-      fetchQiPdiReports();
-    }
-  }, [view]);
+    fetchQiPdiReports();
+  }, []);
 
   const resetForm = () => {
     if (window.confirm("Are you sure you want to clear all data?")) {
@@ -1470,7 +1437,7 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
         hipotU: "", hipotV: "", hipotW: "",
         irU: "", irV: "", irW: "",
         resU: "", resV: "", resW: "",
-        sineMin: "", sineMax: "", cosMin: "", cosMax: "", sinePP: "", cosPP: "", offset: "",
+        sineMin: "", sineMax: "", cosMin: "", cosMax: "", sinePP: "", cosPP: "", offset: "766",
         workOrderId: "", itemIdx: "",
       });
       setPpData([]);
@@ -1623,7 +1590,6 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
         if (setTraceabilityData && showToast && syncToDisk) {
           const normalizedSerial = (form.serialNo || '').toString().trim().toUpperCase();
           const existing = traceabilityData.find(e =>
-            String(e.workOrderId) === String(form.workOrderId) &&
             (e.actualSerialNo || '').toString().trim().toUpperCase() === normalizedSerial &&
             e.type === 'EOL'
           );
@@ -1631,10 +1597,9 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
             const entry = {
               id: Date.now(),
               type: 'EOL',
-              modelNumber: selectedItem?.modelNumber || form.motorModel || '',
-              partNumber: selectedItem?.partNumber || '',
-              workOrderId: form.workOrderId,
-              workOrderTitle: selectedWO?.title || '',
+              modelNumber: form.motorModel || '',
+              partNumber: form.motorCode || '',
+              programName: form.programName || '',
               actualSerialNo: form.serialNo,
               eolReport: '',
               photo: '',
@@ -1654,7 +1619,6 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
             if (addNotification) {
               addNotification('Validation Functional Head', `New EOL traceability record auto-created from EOL Report Generator for ${form.motorModel} (SN: ${form.serialNo})`, entry.id);
             }
-            setPendingUpload({ id: entry.id, type: 'EOL' });
           }
         }
 
@@ -1805,7 +1769,6 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
         if (setTraceabilityData && showToast && syncToDisk) {
           const normalizedSerial = (form.serialNo || '').toString().trim().toUpperCase();
           const existing = traceabilityData.find(e =>
-            String(e.workOrderId) === String(form.workOrderId) &&
             (e.actualSerialNo || '').toString().trim().toUpperCase() === normalizedSerial &&
             e.type === 'PDI'
           );
@@ -1813,10 +1776,9 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
             const entry = {
               id: Date.now(),
               type: 'PDI',
-              modelNumber: selectedItem?.modelNumber || form.motorModel || '',
-              partNumber: selectedItem?.partNumber || '',
-              workOrderId: form.workOrderId,
-              workOrderTitle: selectedWO?.title || '',
+              modelNumber: form.motorModel || '',
+              partNumber: form.motorCode || '',
+              programName: form.programName || '',
               actualSerialNo: form.serialNo,
               pdiReport: '',
               photo: '',
@@ -1836,7 +1798,6 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
             if (addNotification) {
               addNotification('Proto Functional Head', `New PDI traceability record auto-created from QI/PDI Report for ${form.motorModel} (SN: ${form.serialNo})`, entry.id);
             }
-            setPendingUpload({ id: entry.id, type: 'PDI' });
             setPreviewQiPdi({
               id: entry.id,
               serialNo: form.serialNo,
@@ -1947,7 +1908,7 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
 
   const sectionProgress = useMemo(() => {
     return {
-      identity: [form.workOrderId, form.itemIdx, form.serialNo, form.testDate, form.motorCode, form.motorModel, form.testedBy].filter(Boolean).length,
+      identity: [form.programName, form.serialNo, form.testDate, form.motorCode, form.motorModel, form.testedBy].filter(Boolean).length,
       pdi: [form.hipotU, form.hipotV, form.hipotW, form.irU, form.irV, form.irW, form.resU, form.resV, form.resW].filter(Boolean).length,
       encoder: [form.sineMin, form.sineMax, form.cosMin, form.cosMax, form.sinePP, form.cosPP, form.offset].filter(Boolean).length,
       uploads: (ppData.length > 0 ? 1 : 0) + (bemfData.length > 0 ? 1 : 0),
@@ -1956,7 +1917,7 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
 
   const totalProgress = useMemo(() => {
     // Identity (7) + PDI (9) + Encoder (7) + Uploads (2) = 25
-    const total = 7 + 9 + 7 + 2;
+    const total = 6 + 9 + 7 + 2;
     const current = sectionProgress.identity + sectionProgress.pdi + sectionProgress.encoder + sectionProgress.uploads;
     return Math.round((current / total) * 100);
   }, [sectionProgress]);
@@ -1996,9 +1957,10 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
       const uploadRes = await fetch(`${API_BASE_URL}/api/upload`, { method: 'POST', body: formData });
       const uploadData = await uploadRes.json();
       if (uploadData.fileName) {
-        if (selectedMotor) {
+        const eolEntry = traceabilityData.find(e => e.actualSerialNo === form.serialNo && e.type === 'EOL');
+        if (eolEntry) {
           const updated = traceabilityData.map(e =>
-            e.id === selectedMotor.id ? { ...e, eolReport: uploadData.fileName } : e
+            e.id === eolEntry.id ? { ...e, eolReport: uploadData.fileName } : e
           );
           setTraceabilityData(updated);
           syncToDisk({ key: 'traceability', data: updated });
@@ -2011,7 +1973,7 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
       console.error('EOL PDF upload failed:', err);
       setUploadStatus('error');
     }
-  }, [form.serialNo, reportRef, hiddenEolRef, selectedMotor, traceabilityData, syncToDisk]);
+  }, [form.serialNo, reportRef, hiddenEolRef, traceabilityData, syncToDisk]);
 
   const handleUploadPdiReport = useCallback(async () => {
     if (!hiddenPdiRef.current) return;
@@ -2040,6 +2002,59 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
       setPdiUploadStatus('error');
     }
   }, [form.serialNo, hiddenPdiRef, previewQiPdi, traceabilityData, syncToDisk]);
+
+  const handleManualEolUpload = useCallback(async (file) => {
+    if (!file) return;
+    setUploadStatus('uploading');
+    try {
+      const formData = new FormData();
+      formData.append('file', file, file.name);
+      const uploadRes = await fetch(`${API_BASE_URL}/api/upload`, { method: 'POST', body: formData });
+      const uploadData = await uploadRes.json();
+      if (uploadData.fileName) {
+        const eolEntry = traceabilityData.find(e => e.actualSerialNo === form.serialNo && e.type === 'EOL');
+        if (eolEntry) {
+          const updated = traceabilityData.map(e =>
+            e.id === eolEntry.id ? { ...e, eolReport: uploadData.fileName } : e
+          );
+          setTraceabilityData(updated);
+          syncToDisk({ key: 'traceability', data: updated });
+        }
+        setUploadStatus('success');
+      } else {
+        setUploadStatus('error');
+      }
+    } catch (err) {
+      console.error('Manual EOL PDF upload failed:', err);
+      setUploadStatus('error');
+    }
+  }, [form.serialNo, traceabilityData, syncToDisk]);
+
+  const handleManualPdiUpload = useCallback(async (file) => {
+    if (!file) return;
+    setPdiUploadStatus('uploading');
+    try {
+      const formData = new FormData();
+      formData.append('file', file, file.name);
+      const uploadRes = await fetch(`${API_BASE_URL}/api/upload`, { method: 'POST', body: formData });
+      const uploadData = await uploadRes.json();
+      if (uploadData.fileName) {
+        if (previewQiPdi) {
+          const updated = traceabilityData.map(e =>
+            e.id === previewQiPdi.id ? { ...e, pdiReport: uploadData.fileName } : e
+          );
+          setTraceabilityData(updated);
+          syncToDisk({ key: 'traceability', data: updated });
+        }
+        setPdiUploadStatus('success');
+      } else {
+        setPdiUploadStatus('error');
+      }
+    } catch (err) {
+      console.error('Manual PDI PDF upload failed:', err);
+      setPdiUploadStatus('error');
+    }
+  }, [previewQiPdi, traceabilityData, syncToDisk]);
 
   // ── Parse Peak Power XLSX ─────────────────────────────────────────────────
   const parsePP = useCallback((file) => {
@@ -2202,12 +2217,12 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
 
   const missingFieldsBySection = useMemo(() => {
     const sections = {
-      "Identity": ["workOrderId", "itemIdx", "serialNo", "testDate", "motorCode", "motorModel", "testedBy"],
+      "Identity": ["programName", "serialNo", "testDate", "motorCode", "motorModel", "testedBy"],
       "PDI": ["hipotU", "hipotV", "hipotW", "irU", "irV", "irW", "resU", "resV", "resW"],
       "Encoder": ["sineMin", "sineMax", "cosMin", "cosMax", "sinePP", "cosPP", "offset"]
     };
     const labels = {
-      workOrderId: "Work Order", itemIdx: "Model/Part", serialNo: "Serial No", testDate: "Test Date", motorCode: "Part No.", motorModel: "Motor Model",
+      programName: "Program", serialNo: "Serial No", testDate: "Test Date", motorCode: "Part No.", motorModel: "Motor Model",
       testedBy: "Tested By", hipotU: "Hipot U", hipotV: "Hipot V", hipotW: "Hipot W",
       irU: "IR U", irV: "IR V", irW: "IR W", resU: "Res U", resV: "Res V", resW: "Res W", sineMin: "Sine Min", sineMax: "Sine Max",
       cosMin: "Cos Min", cosMax: "Cos Max", sinePP: "Sine P-P", cosPP: "Cos P-P", offset: "Offset"
@@ -2227,6 +2242,99 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
 
   const canGenerate = Object.keys(missingFieldsBySection).length === 0;
   const tooltipText = !canGenerate ? `Required fields missing:\n${Object.entries(missingFieldsBySection).map(([section, fields]) => `• ${section}: ${fields.join(", ")}`).join("\n")}` : "";
+
+  const handleFunctionalApprove = (entry) => {
+    const updated = (traceabilityData || []).map(e =>
+      e.id === entry.id
+        ? {
+            ...e,
+            status: 'Pending Program Owner',
+            assignedTo: null,
+            isReassigned: false,
+            reassignedTo: null,
+            reassignedRole: null,
+            history: [
+              ...(e.history || []),
+              {
+                date: new Date().toISOString(),
+                user: currentUser.user,
+                action: 'Approved by Functional Head',
+                role: (currentUser.roles || []).join(', ')
+              }
+            ]
+          }
+        : e
+    );
+    setTraceabilityData(updated);
+    syncToDisk({ key: 'traceability', data: updated });
+  };
+
+  const handleFunctionalReject = (entry) => {
+    const updated = (traceabilityData || []).map(e =>
+      e.id === entry.id
+        ? {
+            ...e,
+            status: 'Rejected',
+            assignedTo: null,
+            isReassigned: false,
+            reassignedTo: null,
+            reassignedRole: null,
+            history: [
+              ...(e.history || []),
+              {
+                date: new Date().toISOString(),
+                user: currentUser.user,
+                action: 'Rejected by Functional Head',
+                role: (currentUser.roles || []).join(', ')
+              }
+            ]
+          }
+        : e
+    );
+    setTraceabilityData(updated);
+    syncToDisk({ key: 'traceability', data: updated });
+  };
+
+  const handleReassignRole = () => {
+    if (!reassigningEntry || !targetUser) return;
+    const selectedTarget = registeredUsers.find(u => u.username === targetUser);
+    if (!selectedTarget) return;
+    let nextStatus = reassigningEntry.status;
+    const roles = selectedTarget.roles || [];
+    if (roles.includes('Program Head') || roles.includes('Program Owner')) {
+      nextStatus = 'Pending Program Owner';
+    } else if (roles.includes('Functional Head')) {
+      if (selectedTarget.domain === 'Prototyping') nextStatus = 'Pending Proto Functional Head';
+      else if (selectedTarget.domain === 'Validation') nextStatus = 'Pending Validation Functional Head';
+      else if (selectedTarget.domain === 'Program') nextStatus = 'Pending Program Owner';
+    }
+    const historyEntry = {
+      date: new Date().toISOString(),
+      user: currentUser.user,
+      role: (currentUser.roles || []).join(', '),
+      action: 'Record Reassigned',
+      reassignedTo: selectedTarget.username,
+      reassignedRole: roles.join(', '),
+      remarks: `Reassigned specifically to ${selectedTarget.username} (${roles.join(', ')})`
+    };
+    const updated = traceabilityData.map(e => e.id === reassigningEntry.id ? {
+      ...e,
+      status: nextStatus,
+      assignedTo: targetUser,
+      isReassigned: true,
+      reassignedTo: selectedTarget.username,
+      reassignedRole: roles.join(', '),
+      history: [...(e.history || []), historyEntry]
+    } : e);
+    setTraceabilityData(updated);
+    syncToDisk({ key: 'traceability', data: updated });
+    if (addNotification) {
+      addNotification(targetUser, `A traceability record for ${reassigningEntry.modelNumber} has been reassigned specifically to you for approval.`, reassigningEntry.id);
+    }
+    setReassigningEntry(null);
+    setTargetUser('');
+    if (showToast) showToast(`Entry reassigned to ${selectedTarget.username}.`);
+  };
 
   // ── RENDER ────────────────────────────────────────────────────────────────
   return (
@@ -2276,945 +2384,1431 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
               <NavIcon type="archive" color={view === 'archive' ? activeTheme.primary : activeTheme.textMuted} /> Archive
             </button>
           )}
-      </div>
+        </div>
       )}
 
-            <main style={{ flex: 1, minWidth: 0 }} className={embedded ? 'embedded-eol-main' : ''}>
-              {view === "new_report" && (
-                <>
-                  <div style={{ ...S.stepBar, background: 'transparent', borderBottom: 'none', padding: "8px 24px", gap: 12 }}>
-                    {["01 // Data Entry", "02 // Report", "03 // Upload Report"].map((label, i) => (
-                      <button key={i}
-                        style={{
-                          padding: "8px 20px", fontSize: 10, fontWeight: 800, letterSpacing: 1, cursor: "pointer", border: "none",
-                          borderRadius: 30,
-                          background: step === i ? activeTheme.primary : activeTheme.surfaceAlt,
-                          color: step === i ? "#fff" : activeTheme.textMuted,
-                          boxShadow: step === i ? `0 4px 12px ${activeTheme.primary}44` : 'none',
-                          transition: "all 0.3s ease",
-                          textTransform: "uppercase"
-                        }}
-                        onClick={() => setStep(i)}
-                      >
-                        {step > i && "✓ "}{label}
-                      </button>
-                    ))}
+      <main style={{ flex: 1, minWidth: 0 }} className={embedded ? 'embedded-eol-main' : ''}>
+        {view === "new_report" && (
+          <>
+            <div style={{ ...S.stepBar, background: 'transparent', borderBottom: 'none', padding: "8px 24px", gap: 12 }}>
+              {["01 // Data Entry", "02 // Report", "03 // Upload Report"].map((label, i) => (
+                <button key={i}
+                  style={{
+                    padding: "8px 20px", fontSize: 10, fontWeight: 800, letterSpacing: 1, cursor: "pointer", border: "none",
+                    borderRadius: 30,
+                    background: step === i ? activeTheme.primary : activeTheme.surfaceAlt,
+                    color: step === i ? "#fff" : activeTheme.textMuted,
+                    boxShadow: step === i ? `0 4px 12px ${activeTheme.primary}44` : 'none',
+                    transition: "all 0.3s ease",
+                    textTransform: "uppercase"
+                  }}
+                  onClick={() => setStep(i)}
+                >
+                  {step > i && "✓ "}{label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        <div style={{ padding: "16px 0px", maxWidth: 1600, margin: "0 auto" }}>
+          {/* ── DASHBOARD VIEW ── */}
+          {view === "dashboard" && (
+            <div>
+              <div style={{ ...S.sectionTitle, marginBottom: 24, fontSize: 16 }}>Performance Dashboard</div>
+              <div className="dashboard-grid">
+                <div style={{ ...S.section, textAlign: 'center' }} className="entrance-fade">
+                  <div style={S.label}>Total Tested</div>
+                  <div style={{ fontSize: 42, fontWeight: 900, color: activeTheme.primary, margin: '10px 0' }}>{approvedMotors.length}</div>
+                  <div style={{ fontSize: 9, color: activeTheme.textMuted }}>APPROVED RECORDS</div>
+                </div>
+                <div style={{ ...S.section, textAlign: 'center', borderLeft: `4px solid ${activeTheme.success}`, animationDelay: '0.1s' }} className="entrance-fade">
+                  <div style={S.label}>Passed</div>
+                  <div style={{ fontSize: 42, fontWeight: 900, color: activeTheme.success, margin: '10px 0' }}>{approvedMotors.filter(m => m.overallPass).length}</div>
+                  <div style={{ fontSize: 9, color: activeTheme.textMuted }}>COMPLIANT (APPROVED)</div>
+                </div>
+                <div style={{ ...S.section, textAlign: 'center', borderLeft: `4px solid ${activeTheme.error}`, animationDelay: '0.2s' }} className="entrance-fade">
+                  <div style={S.label}>Failed</div>
+                  <div style={{ fontSize: 42, fontWeight: 900, color: activeTheme.error, margin: '10px 0' }}>{approvedMotors.filter(m => !m.overallPass).length}</div>
+                  <div style={{ fontSize: 9, color: activeTheme.textMuted }}>NON-COMPLIANT (APPROVED)</div>
+                </div>
+                <div style={{ ...S.section, textAlign: 'center', background: `linear-gradient(135deg, ${activeTheme.surface} 0%, ${activeTheme.surfaceAlt} 100%)`, animationDelay: '0.4s' }} className="entrance-fade">
+                  <div style={S.label}>Pass Rate</div>
+                  <div style={{ fontSize: 42, fontWeight: 900, color: activeTheme.accent, margin: '10px 0' }}>
+                    {approvedMotors.length ? ((approvedMotors.filter(m => m.overallPass).length / approvedMotors.length) * 100).toFixed(1) : 0}%
                   </div>
-                </>
+                  <div style={{
+                    height: 4, width: '100%', background: activeTheme.border, borderRadius: 2, marginTop: 10, overflow: 'hidden'
+                  }}>
+                    <div style={{ height: '100%', width: approvedMotors.length ? `${(approvedMotors.filter(m => m.overallPass).length / approvedMotors.length) * 100}%` : '0%', background: activeTheme.accent }}></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── QI/PDI DASHBOARD VIEW ── */}
+          {view === "qi_pdi_dashboard" && (
+            <div className="entrance-fade">
+              <div style={{ ...S.sectionTitle, marginBottom: 24, fontSize: 16 }}>QI / PDI Performance Dashboard</div>
+              <div className="dashboard-grid">
+                <div style={{ ...S.section, textAlign: 'center' }}>
+                  <div style={S.label}>Total Inspections</div>
+                  <div style={{ fontSize: 42, fontWeight: 900, color: activeTheme.primary, margin: '10px 0' }}>{qiPdiReports.length}</div>
+                  <div style={{ fontSize: 9, color: activeTheme.textMuted }}>COMPLETED REPORTS</div>
+                </div>
+                <div style={{ ...S.section, textAlign: 'center' }}>
+                  <div style={S.label}>Motor Models</div>
+                  <div style={{ fontSize: 42, fontWeight: 900, color: activeTheme.accent, margin: '10px 0' }}>{[...new Set(qiPdiReports.map(r => r.motorModel))].length}</div>
+                  <div style={{ fontSize: 9, color: activeTheme.textMuted }}>UNIQUE MODELS INSPECTED</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── GOLDEN SAMPLES VIEW ── */}
+          {view === "golden_samples" && (
+            <div className="entrance-fade">
+              <div style={{ ...S.sectionTitle, marginBottom: 24, fontSize: 16 }}>Golden Sample Configuration Management</div>
+
+              {/* Golden Sub Tabs */}
+              <div style={S.tabBar}>
+                <button style={S.tabBtn(goldenSubTab === 'entry')} onClick={() => setGoldenSubTab('entry')}>Golden Sample Data Entry</button>
+                <button style={S.tabBtn(goldenSubTab === 'list')} onClick={() => setGoldenSubTab('list')}>Configured Motor Models</button>
+              </div>
+
+              {goldenSubTab === 'entry' ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 24, alignItems: 'start' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                    <div style={S.section}>
+                      <div style={S.sectionTitle}>1. Basic Motor Identity & Limits</div>
+                      <div>
+                        <label style={S.label}>Model / Part No. <span style={{ color: activeTheme.error }}>*</span></label>
+                        <select
+                          style={{ ...S.input, padding: "8px 10px", flex: 1, opacity: uniqueModelPartOptions.length === 0 ? 0.6 : 1 }}
+                          value={uniqueModelPartOptions.findIndex(o => o.partNumber === goldenForm.motorCode && o.modelNumber === goldenForm.motorModel)}
+                          disabled={uniqueModelPartOptions.length === 0}
+                          onChange={e => {
+                            const idx = parseInt(e.target.value, 10);
+                            const opt = uniqueModelPartOptions[idx];
+                            if (opt) {
+                              // Check if a golden sample already exists for this part+model
+                              const existing = goldenSamples.find(s =>
+                                s.motorCode === opt.partNumber && s.motorModel === opt.modelNumber
+                              );
+                              if (existing) {
+                                const pc = existing.performanceCurves && Array.isArray(existing.performanceCurves)
+                                  ? existing.performanceCurves : existing.performanceCurves
+                                    ? Object.keys(existing.performanceCurves).map(rpm => ({
+                                      rpm, torque: existing.performanceCurves[rpm],
+                                      power: existing.powerCurve?.[rpm] || "",
+                                      efficiency: existing.groupEff?.[rpm] || ""
+                                    }))
+                                    : [...initialPerformanceCurves];
+                                setGoldenForm({
+                                  motorCode: opt.partNumber,
+                                  motorModel: opt.modelNumber,
+                                  nominalVoltage: existing.nominalVoltage || "",
+                                  peakPower: existing.peakPower || "",
+                                  peakTorque: existing.peakTorque || "",
+                                  peakCurrentAC: existing.peakCurrentAC || "",
+                                  maxSpeed: existing.maxSpeed || "",
+                                  bemfAt3000: existing.bemfAt3000 || "",
+                                  resistance: existing.resistance || "",
+                                  hipotLimit: existing.hipotLimit || "",
+                                  irLimit: existing.irLimit || "",
+                                  encoder: existing.encoder ? { ...existing.encoder } : { sineMin: "", sineMax: "", cosMin: "", cosMax: "", sinePP: "", cosPP: "", offset: "" },
+                                  performanceCurves: pc,
+                                });
+                                setEditingGoldenId(existing.id);
+                              } else {
+                                setGoldenForm(f => ({ ...f, motorCode: opt.partNumber, motorModel: opt.modelNumber }));
+                                setEditingGoldenId(null);
+                              }
+                            }
+                          }}
+                        >
+                          <option value={-1}>{uniqueModelPartOptions.length === 0 ? "No parts available" : "Select Model / Part No."}</option>
+                          {uniqueModelPartOptions.map((opt, i) =>
+                            <option key={i} value={i}>{opt.modelNumber} — {opt.partNumber}</option>
+                          )}
+                        </select>
+                      </div>
+                      <MField label="Motor Model Name" required value={goldenForm.motorModel} onChange={v => setGoldenForm({ ...goldenForm, motorModel: v })} S={S} theme={activeTheme} />
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                        <MField label="Nominal VDC" unit="V" required value={goldenForm.nominalVoltage} onChange={v => setGoldenForm({ ...goldenForm, nominalVoltage: v })} S={S} theme={activeTheme} />
+                        <MField label="Max Power" unit="kW" required value={goldenForm.peakPower} onChange={v => setGoldenForm({ ...goldenForm, peakPower: v })} S={S} theme={activeTheme} />
+                        <MField label="Max Torque" unit="Nm" required value={goldenForm.peakTorque} onChange={v => setGoldenForm({ ...goldenForm, peakTorque: v })} S={S} theme={activeTheme} />
+                        <MField label="Max Current" unit="A" required value={goldenForm.peakCurrentAC} onChange={v => setGoldenForm({ ...goldenForm, peakCurrentAC: v })} S={S} theme={activeTheme} />
+                        <MField label="Max Speed" unit="RPM" required value={goldenForm.maxSpeed} onChange={v => setGoldenForm({ ...goldenForm, maxSpeed: v })} S={S} theme={activeTheme} />
+                      </div>
+
+                      <div style={{ ...S.sectionTitle, fontSize: 11, marginTop: 18, borderBottom: 'none' }}>2. Electrical & Insulation Targets</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                        <MField label="BEMF @ 3000" unit="V" required value={goldenForm.bemfAt3000} onChange={v => setGoldenForm({ ...goldenForm, bemfAt3000: v })} S={S} theme={activeTheme} />
+                        <MField label="Resistance" unit="mΩ" required value={goldenForm.resistance} onChange={v => setGoldenForm({ ...goldenForm, resistance: v })} S={S} theme={activeTheme} />
+                        <MField label="Hipot Limit" unit="mA" required value={goldenForm.hipotLimit} onChange={v => setGoldenForm({ ...goldenForm, hipotLimit: v })} S={S} theme={activeTheme} />
+                        <MField label="IR Min Limit" unit="MΩ" required value={goldenForm.irLimit} onChange={v => setGoldenForm({ ...goldenForm, irLimit: v })} S={S} theme={activeTheme} />
+                      </div>
+
+                      <div style={{ ...S.sectionTitle, fontSize: 11, marginTop: 18, borderBottom: 'none' }}>3. Resolver/Encoder Calibration Targets</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                        <MField label="Sine Min" value={goldenForm.encoder.sineMin} onChange={v => setGoldenForm({ ...goldenForm, encoder: { ...goldenForm.encoder, sineMin: v } })} S={S} theme={activeTheme} required />
+                        <MField label="Sine Max" value={goldenForm.encoder.sineMax} onChange={v => setGoldenForm({ ...goldenForm, encoder: { ...goldenForm.encoder, sineMax: v } })} S={S} theme={activeTheme} required />
+                        <MField label="Cos Min" value={goldenForm.encoder.cosMin} onChange={v => setGoldenForm({ ...goldenForm, encoder: { ...goldenForm.encoder, cosMin: v } })} S={S} theme={activeTheme} required />
+                        <MField label="Cos Max" value={goldenForm.encoder.cosMax} onChange={v => setGoldenForm({ ...goldenForm, encoder: { ...goldenForm.encoder, cosMax: v } })} S={S} theme={activeTheme} required />
+                        <MField label="Sine P-P" value={goldenForm.encoder.sinePP} onChange={v => setGoldenForm({ ...goldenForm, encoder: { ...goldenForm.encoder, sinePP: v } })} S={S} theme={activeTheme} required />
+                        <MField label="Cos P-P" value={goldenForm.encoder.cosPP} onChange={v => setGoldenForm({ ...goldenForm, encoder: { ...goldenForm.encoder, cosPP: v } })} S={S} theme={activeTheme} required />
+                        <MField label="Calib Offset" value={goldenForm.encoder.offset} onChange={v => setGoldenForm({ ...goldenForm, encoder: { ...goldenForm.encoder, offset: v } })} S={S} theme={activeTheme} required />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={S.section}>
+                    <div style={S.sectionTitle}>4. Performance Curve Reference Points</div>
+                    <table style={{ ...S.table, marginBottom: 15 }}>
+                      <thead>
+                        <tr>
+                          <th style={S.th}>RPM</th>
+                          <th style={S.th}>Torque (Nm)</th>
+                          <th style={S.th}>Power (kW)</th>
+                          <th style={S.th}>Eff (%)</th>
+                          <th style={S.th}>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {goldenForm.performanceCurves.map((row, idx) => (
+                          <tr key={idx}>
+                            <td style={S.td}><input style={S.input} type="number" value={row.rpm} onChange={e => {
+                              const newList = [...goldenForm.performanceCurves];
+                              newList[idx].rpm = e.target.value;
+                              setGoldenForm({ ...goldenForm, performanceCurves: newList });
+                            }} /></td>
+                            <td style={S.td}><input style={S.input} type="number" value={row.torque} onChange={e => {
+                              const newList = [...goldenForm.performanceCurves];
+                              newList[idx].torque = e.target.value;
+                              setGoldenForm({ ...goldenForm, performanceCurves: newList });
+                            }} /></td>
+                            <td style={S.td}><input style={S.input} type="number" value={row.power} onChange={e => {
+                              const newList = [...goldenForm.performanceCurves];
+                              newList[idx].power = e.target.value;
+                              setGoldenForm({ ...goldenForm, performanceCurves: newList });
+                            }} /></td>
+                            <td style={S.td}><input style={S.input} type="number" value={row.efficiency} onChange={e => {
+                              const newList = [...goldenForm.performanceCurves];
+                              newList[idx].efficiency = e.target.value;
+                              setGoldenForm({ ...goldenForm, performanceCurves: newList });
+                            }} /></td>
+                            <td style={S.td}>
+                              <button style={{ ...S.btn('error'), padding: '4px 8px', fontSize: 10 }} onClick={() => {
+                                const newList = goldenForm.performanceCurves.filter((_, i) => i !== idx);
+                                setGoldenForm({ ...goldenForm, performanceCurves: newList });
+                              }}>Remove</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <button style={{ ...S.btn('default'), width: '100%', marginBottom: 20 }} onClick={() => setGoldenForm({ ...goldenForm, performanceCurves: [...goldenForm.performanceCurves, { rpm: "", torque: "", power: "", efficiency: "" }] })}>+ Add Row</button>
+                    <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
+                      <button style={{ ...S.btn("primary"), flex: 1 }} onClick={saveGoldenSample}>💾 Save Configuration</button>
+                      <button style={{ ...S.btn("default"), flex: 1 }} onClick={resetGoldenForm}>🔄 Reset Form</button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={S.section}>
+                  <div style={{ ...S.sectionTitle, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>QI/PDI Reference Checklists</span>
+                    <button onClick={syncQiPdiRefSamples} style={{ ...S.btn('default'), padding: '4px 8px', fontSize: 10 }}>Refresh List</button>
+                  </div>
+                  <table style={S.table}>
+                    <thead>
+                      <tr>
+                        <th style={S.th}>Part No.</th>
+                        <th style={S.th}>Model Name</th>
+                        <th style={S.th}>Power (kW)</th>
+                        <th style={S.th}>Torque (Nm)</th>
+                        <th style={S.th}>BEMF (V)</th>
+                        <th style={S.th}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {goldenSamples.length === 0 ? (
+                        <tr><td colSpan="4" style={{ ...S.td, textAlign: 'center', color: activeTheme.textMuted }}>No models configured yet.</td></tr>
+                      ) : (
+                        goldenSamples.map((s) => (
+                          <tr key={s.id || s.motorModel} style={{ background: activeTheme.surface }}>
+                            <td style={S.td}>{s.motorCode || 'N/A'}</td>
+                            <td style={S.td}>{s.motorModel || 'N/A'}</td>
+                            <td style={S.td}>{s.peakPower || 'N/A'} kW</td>
+                            <td style={S.td}>{s.peakTorque || 'N/A'} Nm</td>
+                            <td style={S.td}>{s.bemfAt3000 || 'N/A'} V</td>
+                            <td style={{ ...S.td, display: 'flex', gap: 8 }}>
+                              {canEditGolden && <button style={{ ...S.btn('primary'), padding: '4px 8px', fontSize: 10 }} onClick={() => handleEditGolden(s)}>Edit</button>}
+                              <button style={{ ...S.btn('default'), padding: '4px 8px', fontSize: 10 }} onClick={() => setPreviewGolden(s)}>Preview</button>
+                              {canEditGolden && <button style={{ ...S.btn('error'), padding: '4px 8px', fontSize: 10 }} onClick={() => handleDeleteGolden(s.id)}>Delete</button>}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── QI/PDI REFERENCE SAMPLES VIEW ── */}
+          {view === "qi_pdi_ref_samples" && (
+            <div className="entrance-fade">
+              <div style={{ ...S.sectionTitle, marginBottom: 24, fontSize: 16 }}>QI/PDI Reference Samples (Checklists)</div>
+              <div style={S.tabBar}>
+                <button style={S.tabBtn(qiPdiRefSubTab === 'entry')} onClick={() => setQiPdiRefSubTab('entry')}>Setup Checklist</button>
+                <button style={S.tabBtn(qiPdiRefSubTab === 'list')} onClick={() => setQiPdiRefSubTab('list')}>Configured Models</button>
+              </div>
+
+              {qiPdiRefSubTab === 'entry' ? (
+                <div style={S.section}>
+                  <div>
+                    <label style={S.label}>Model / Part No. <span style={{ color: activeTheme.error }}>*</span></label>
+                    <select
+                      style={{ ...S.input, padding: "8px 10px", flex: 1, opacity: uniqueModelPartOptions.length === 0 ? 0.6 : 1 }}
+                      value={uniqueModelPartOptions.findIndex(o => o.partNumber === qiPdiRefForm.motorCode && o.modelNumber === qiPdiRefForm.motorModel)}
+                      disabled={uniqueModelPartOptions.length === 0}
+                      onChange={e => {
+                        const idx = parseInt(e.target.value, 10);
+                        const opt = uniqueModelPartOptions[idx];
+                        if (opt) {
+                          const existing = qiPdiRefSamples.find(s =>
+                            s.motorCode === opt.partNumber && s.motorModel === opt.modelNumber
+                          );
+                          if (existing) {
+                            setQiPdiRefForm({
+                              motorCode: opt.partNumber,
+                              motorModel: opt.modelNumber,
+                              checklist: existing.checklist.map(i => ({ ...i })),
+                            });
+                            setEditingQiPdiRefId(existing.id);
+                          } else {
+                            setQiPdiRefForm(f => ({ ...f, motorCode: opt.partNumber, motorModel: opt.modelNumber }));
+                            setEditingQiPdiRefId(null);
+                          }
+                        }
+                      }}
+                    >
+                      <option value={-1}>{uniqueModelPartOptions.length === 0 ? "No parts available" : "Select Model / Part No."}</option>
+                      {uniqueModelPartOptions.map((opt, i) =>
+                        <option key={i} value={i}>{opt.modelNumber} — {opt.partNumber}</option>
+                      )}
+                    </select>
+                  </div>
+                  <MField label="Motor Model Name" required value={qiPdiRefForm.motorModel} onChange={v => setQiPdiRefForm({ ...qiPdiRefForm, motorModel: v })} S={S} theme={activeTheme} />
+                  <div style={{ ...S.sectionTitle, fontSize: 12, marginTop: 20 }}>Checklist Configuration</div>
+                  <table style={S.table}>
+                    <thead>
+                      <tr>
+                        <th style={S.th}>Description</th>
+                        <th style={S.th}>Spec</th>
+                        <th style={S.th}>Method</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {qiPdiRefForm.checklist.map((item, idx) => (
+                        <tr key={idx}>
+                          <td style={S.td}><input style={{ ...S.input, fontSize: 11 }} value={item.desc} onChange={e => {
+                            const newList = [...qiPdiRefForm.checklist];
+                            newList[idx] = { ...newList[idx], desc: e.target.value };
+                            setQiPdiRefForm({ ...qiPdiRefForm, checklist: newList });
+                          }} /></td>
+                          <td style={S.td}><input style={{ ...S.input, fontSize: 11 }} value={item.spec} onChange={e => {
+                            const newList = [...qiPdiRefForm.checklist];
+                            newList[idx] = { ...newList[idx], spec: e.target.value };
+                            setQiPdiRefForm({ ...qiPdiRefForm, checklist: newList });
+                          }} /></td>
+                          <td style={S.td}><input style={{ ...S.input, fontSize: 11 }} value={item.method} onChange={e => {
+                            const newList = [...qiPdiRefForm.checklist];
+                            newList[idx] = { ...newList[idx], method: e.target.value };
+                            setQiPdiRefForm({ ...qiPdiRefForm, checklist: newList });
+                          }} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
+                    <button
+                      style={{ ...S.btn(isSaving ? "default" : "primary"), flex: 1 }}
+                      onClick={saveQiPdiRef}
+                      disabled={isSaving}
+                    >
+                      {isSaving ? "Saving..." : "💾 Save Reference Checklist"}
+                    </button>
+                    <button style={{ ...S.btn("default"), flex: 1 }} onClick={() => {
+                      setQiPdiRefForm({ motorCode: "", motorModel: "", checklist: QI_PDI_DEFAULTS.map(i => ({ ...i })) });
+                      setEditingQiPdiRefId(null);
+                    }}>🔄 Reset</button>
+                  </div>
+                </div>
+              ) : (
+                <div style={S.section}>
+                  <table style={S.table}>
+                    <thead>
+                      <tr>
+                        <th style={S.th}>Part No.</th>
+                        <th style={S.th}>Model Name</th>
+                        <th style={S.th}>Checks Count</th>
+                        <th style={S.th}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {qiPdiRefSamples.length === 0 ? (
+                        <tr><td colSpan="3" style={{ ...S.td, textAlign: 'center', color: activeTheme.textMuted }}>No reference checklists found.</td></tr>
+                      ) : (
+                        qiPdiRefSamples.map((s) => (
+                          <tr key={s.id} style={{ background: activeTheme.surface }}>
+                            <td style={S.td}>{s.motorCode}</td>
+                            <td style={S.td}>{s.motorModel}</td>
+                            <td style={S.td}>{s.checklist.length} items</td>
+                            <td style={{ ...S.td, display: 'flex', gap: 8 }}>
+                              {canEditQiRef && <button style={{ ...S.btn('primary'), padding: '4px 8px', fontSize: 10 }} onClick={() => handleEditQiPdiRef(s)}>Edit</button>}
+                              {canEditQiRef && <button style={{ ...S.btn('error'), padding: '4px 8px', fontSize: 10 }} onClick={() => handleDeleteQiPdiRef(s.id)}>Delete</button>}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── APPROVALS VIEW (Functional Head) ── */}
+          {view === "approvals" && (
+            <div className="entrance-fade">
+              <div style={{ ...S.sectionTitle, marginBottom: 24, fontSize: 16 }}>
+                <CheckCircle2 size={20} style={{ verticalAlign: 'middle', marginRight: 8 }} />
+                Pending Functional Head Approvals
+              </div>
+              {(() => {
+                const roles = currentUser.roles || [];
+                const domains = currentUser.domains || [];
+                const isAdmin = roles.includes('Administrator') || roles.includes('Developer');
+                const canSeeValidation = isAdmin || (roles.includes('Functional Head') && domains.includes('Validation'));
+                const canSeeProto = isAdmin || (roles.includes('Functional Head') && domains.includes('Prototyping'));
+                const eolEntries = (traceabilityData || []).filter(e => e.status === 'Pending Validation Functional Head');
+                const pdiEntries = (traceabilityData || []).filter(e => e.status === 'Pending Proto Functional Head');
+                const showEolTab = canSeeValidation && eolEntries.length > 0;
+                const showPdiTab = canSeeProto && pdiEntries.length > 0;
+                if (!canSeeValidation && !canSeeProto) {
+                  return <p style={{ textAlign: 'center', color: activeTheme.textMuted, padding: 40 }}>No pending approvals for your role.</p>;
+                }
+                return (
+                  <>
+                    <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
+                      {showEolTab && (
+                        <button style={S.tabBtn(approvalTab === 'eol')} onClick={() => setApprovalTab('eol')}>EOL Approvals</button>
+                      )}
+                      {showPdiTab && (
+                        <button style={S.tabBtn(approvalTab === 'pdi')} onClick={() => setApprovalTab('pdi')}>PDI Approvals</button>
+                      )}
+                    </div>
+                    {approvalTab === 'eol' && showEolTab && (
+                      <div>
+                        {eolEntries.length === 0 ? (
+                          <p style={{ textAlign: 'center', color: activeTheme.textMuted, padding: 20 }}>No pending EOL approvals.</p>
+                        ) : (
+                          <div className="table-container">
+                            <table className="enterprise-table">
+                              <thead>
+                                <tr>
+                                  <th>Date</th>
+                                  <th>Model</th>
+                                  <th>Part No.</th>
+                                  <th>Serial No.</th>
+                                  <th>Type</th>
+                                  <th>Status</th>
+                                  <th>Action</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {eolEntries.map(e => (
+                                  <tr key={e.id} className="table-row-hover">
+                                    <td>{e.createdAt ? e.createdAt.slice(0, 10) : '-'}</td>
+                                    <td>{e.modelNumber || '-'}</td>
+                                    <td>{e.partNumber || '-'}</td>
+                                    <td>{e.actualSerialNo || '-'}</td>
+                                    <td><span className="pill-badge">EOL</span></td>
+                                    <td><span className="pill-badge amber">{e.status}</span></td>
+                                    <td>
+                                      <div style={{ display: 'flex', gap: 8 }}>
+                                        <button className="btn-primary btn-small" style={{ width: 'auto' }} onClick={() => handleFunctionalApprove(e)}>Approve</button>
+                                        <button className="btn-small" style={{ ...S.btn('error'), width: 'auto' }} onClick={() => handleFunctionalReject(e)}>Reject</button>
+                                        <button className="btn-small" style={{ ...S.btn('default'), width: 'auto' }} onClick={() => { setReassigningEntry(e); setTargetUser(''); }} title="Reassign">Reassign</button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {approvalTab === 'pdi' && showPdiTab && (
+                      <div>
+                        {pdiEntries.length === 0 ? (
+                          <p style={{ textAlign: 'center', color: activeTheme.textMuted, padding: 20 }}>No pending PDI approvals.</p>
+                        ) : (
+                          <div className="table-container">
+                            <table className="enterprise-table">
+                              <thead>
+                                <tr>
+                                  <th>Date</th>
+                                  <th>Model</th>
+                                  <th>Part No.</th>
+                                  <th>Serial No.</th>
+                                  <th>Type</th>
+                                  <th>Status</th>
+                                  <th>Action</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {pdiEntries.map(e => (
+                                  <tr key={e.id} className="table-row-hover">
+                                    <td>{e.createdAt ? e.createdAt.slice(0, 10) : '-'}</td>
+                                    <td>{e.modelNumber || '-'}</td>
+                                    <td>{e.partNumber || '-'}</td>
+                                    <td>{e.actualSerialNo || '-'}</td>
+                                    <td><span className="pill-badge">PDI</span></td>
+                                    <td><span className="pill-badge amber">{e.status}</span></td>
+                                    <td>
+                                      <div style={{ display: 'flex', gap: 8 }}>
+                                        <button className="btn-primary btn-small" style={{ width: 'auto' }} onClick={() => handleFunctionalApprove(e)}>Approve</button>
+                                        <button className="btn-small" style={{ ...S.btn('error'), width: 'auto' }} onClick={() => handleFunctionalReject(e)}>Reject</button>
+                                        <button className="btn-small" style={{ ...S.btn('default'), width: 'auto' }} onClick={() => { setReassigningEntry(e); setTargetUser(''); }} title="Reassign">Reassign</button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* ── REASSIGN MODAL ── */}
+          {reassigningEntry && (
+            <div style={{ position: 'fixed', inset: 0, zIndex: 1400, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+              <div style={{ ...S.section, maxWidth: 400, width: '100%', position: 'relative' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <div style={{ ...S.sectionTitle, fontSize: 14, marginBottom: 0 }}>Reassign Approval</div>
+                  <button style={{ ...S.btn('default'), padding: '4px 8px', fontSize: 12 }} onClick={() => setReassigningEntry(null)}>✕</button>
+                </div>
+                <p style={{ fontSize: 12, color: activeTheme.textMuted, marginBottom: 16 }}>
+                  Select a specific individual to handle this approval instead of the generic role.
+                </p>
+                <select
+                  value={targetUser}
+                  onChange={e => setTargetUser(e.target.value)}
+                  style={{ ...S.input, padding: "8px 10px", width: '100%', marginBottom: 16 }}
+                >
+                  <option value="">-- Select User --</option>
+                  {registeredUsers
+                    .filter(u => (u.roles || []).some(r => ['Functional Head', 'Program Owner', 'Program Head', 'Mechanical Head', 'Electrical Head', 'Production Head', 'Head of Technology'].includes(r)) && u.username !== currentUser.user)
+                    .map(u => (
+                      <option key={u.username} value={u.username}>{u.username} ({(u.roles || []).join(', ')})</option>
+                    ))}
+                </select>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button className="btn-primary" style={{ padding: '6px 16px', fontSize: 12 }} onClick={handleReassignRole}>Confirm Reassign</button>
+                  <button className="btn-small" style={{ ...S.btn('default'), padding: '6px 16px', fontSize: 12 }} onClick={() => setReassigningEntry(null)}>Cancel</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── GOLDEN SAMPLE PREVIEW MODAL ── */}
+          {previewGolden && (
+            <div style={{ position: 'fixed', inset: 0, zIndex: 1300, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+              <div style={{ ...S.section, maxWidth: 900, width: '100%', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
+                <button style={{ position: 'absolute', top: 15, right: 15, ...S.btn('default'), padding: '5px 10px' }} onClick={() => setPreviewGolden(null)}>✕</button>
+                <div style={{ ...S.sectionTitle, fontSize: 16 }}>Configuration Preview: {previewGolden.motorCode}</div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                  <div>
+                    <div style={S.label}>Basic Reference</div>
+                    <div style={{ fontSize: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 15px', background: activeTheme.surfaceAlt, padding: 12, borderRadius: 8 }}>
+                      <span>Part No.: <b>{previewGolden.motorCode}</b></span>
+                      <span>Nominal VDC: <b>{previewGolden.nominalVoltage} V</b></span>
+                      <span>Max Power: <b>{previewGolden.peakPower} kW</b></span>
+                      <span>Max Torque: <b>{previewGolden.peakTorque} Nm</b></span>
+                      <span>Max Current: <b>{previewGolden.peakCurrentAC} A</b></span>
+                      <span>Max Speed: <b>{previewGolden.maxSpeed} RPM</b></span>
+                      <span>BEMF @ 3000: <b>{previewGolden.bemfAt3000} V</b></span>
+                    </div>
+                  </div>
+                  <div>
+                    <div style={S.label}>Encoder Limits</div>
+                    <div style={{ fontSize: 11, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 10px' }}>
+                      {previewGolden.encoder ? Object.entries(previewGolden.encoder).map(([k, v]) => (
+                        <span key={k}>{k}: <b>{v}</b></span>
+                      )) : <span style={{ gridColumn: '1 / -1', color: activeTheme.textMuted }}>No encoder data</span>}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 20 }}>
+                  <div style={S.label}>Reference Curves</div>
+                  <div style={{ display: 'flex', gap: 16 }}>
+                    <PerfChart
+                      title="Torque Reference"
+                      unit="Nm"
+                      data={previewGolden.performanceCurves
+                        ? previewGolden.performanceCurves.map(c => ({ speed: c.rpm, Golden: c.torque }))
+                        : Object.entries(previewGolden.torqueCurve || {}).map(([s, v]) => ({ speed: s, Golden: v }))
+                      }
+                      gsKey="Golden"
+                      theme={activeTheme}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── CONSOLIDATED ARCHIVE VIEW (History + Log + PDI Reports) ── */}
+          {view === "archive" && (
+            <div className="entrance-fade">
+              <div style={{ ...S.sectionTitle, marginBottom: 24, fontSize: 16 }}>Reports Archive</div>
+
+              {/* Sub-navigation tabs for Archive */}
+              <div style={{ display: 'flex', gap: 4, alignItems: 'stretch', borderBottom: `1px solid ${activeTheme.border}`, paddingBottom: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+                {/* EOL Archive Group */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <div style={{ fontSize: 8, fontWeight: 900, letterSpacing: 1.5, color: activeTheme.primary, textTransform: 'uppercase', padding: '0 4px', lineHeight: '12px' }}>EOL</div>
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                    <button style={S.tabBtn(archiveSubTab === 'summary')} onClick={() => { setArchiveSubTab('summary'); setArchiveMode('eol'); }}>History Summary</button>
+                    <button style={S.tabBtn(archiveSubTab === 'log')} onClick={() => { setArchiveSubTab('log'); setArchiveMode('eol'); }}>Detailed Parameter Log</button>
+                  </div>
+                </div>
+
+                <div style={{ width: 3, background: activeTheme.textMuted, borderRadius: 2, margin: '0 8px', flexShrink: 0 }} />
+
+                {/* PDI Archive Group */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <div style={{ fontSize: 8, fontWeight: 900, letterSpacing: 1.5, color: activeTheme.primary, textTransform: 'uppercase', padding: '0 4px', lineHeight: '12px' }}>PDI</div>
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                    <button style={S.tabBtn(archiveSubTab === 'pdi')} onClick={() => { setArchiveSubTab('pdi'); setArchiveMode('pdi'); }}>PDI Reports Log</button>
+                  </div>
+                </div>
+              </div>
+
+              {archiveSubTab === 'summary' && (
+                <div style={S.section}>
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ ...S.sectionTitle, marginBottom: 15, border: 'none' }}>Approved Summary</div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", background: activeTheme.surfaceAlt, padding: "5px 8px", borderRadius: 6 }}>
+                      <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1, color: activeTheme.primary, textTransform: 'uppercase' }}>Filter</span>
+                      <div style={{ width: 1, height: 16, background: activeTheme.border, margin: '0 2px' }} />
+                      <input style={{ ...S.input, width: 110, padding: '4px 8px', fontSize: 10 }} placeholder="Serial" value={filterSerial} onChange={e => setFilterSerial(e.target.value)} />
+                      <input style={{ ...S.input, width: 100, padding: '4px 8px', fontSize: 10 }} placeholder="Model" value={filterModel} onChange={e => setFilterModel(e.target.value)} />
+                      <input style={{ ...S.input, width: 100, padding: '4px 8px', fontSize: 10 }} placeholder="Program" value={filterProgram} onChange={e => setFilterProgram(e.target.value)} />
+                      <input type="date" style={{ ...S.input, width: 110, padding: '4px 8px', fontSize: 10 }} value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} />
+                      <span style={{ fontSize: 9, color: activeTheme.textMuted }}>to</span>
+                      <input type="date" style={{ ...S.input, width: 110, padding: '4px 8px', fontSize: 10 }} value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} />
+                    </div>
+                  </div>
+                  <table style={S.table}>
+                    <thead>
+                      <tr>
+                        <th style={S.th}>Date</th>
+                        <th style={S.th}>Serial No</th>
+                        <th style={S.th}>Model</th>
+                        <th style={S.th}>Status</th>
+                        <th style={S.th}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredMotors.filter(m => m.status === 'APPROVED').slice().reverse().map((m, i) => (
+                        <tr key={i} className="table-row-hover">
+                          <td style={S.td}>{m.timestamp.slice(0, 10)}</td>
+                          <td style={S.td}>{m.form.serialNo}</td>
+                          <td style={S.td}>{m.form.motorModel}</td>
+                          <td style={S.td}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <Badge pass={m.overallPass} theme={activeTheme} />
+                              <span style={{ fontSize: 9, color: activeTheme.textMuted }}>{m.status?.replace('_', ' ') || 'Pending'}</span>
+                            </div>
+                          </td>
+                          <td style={{ ...S.td, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                            {deleteConfirmId === m.id ? (
+                              <>
+                                <span style={{ fontSize: 9, fontWeight: 700, color: activeTheme.error }}>Are you sure?</span>
+                                <button
+                                  className="btn-interact"
+                                  style={{ ...S.btn("error"), padding: "6px 12px", fontSize: 9, borderRadius: 20 }}
+                                  onClick={() => handleDelete(m)}
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  className="btn-interact"
+                                  style={{ ...S.btn("default"), padding: "6px 12px", fontSize: 9, borderRadius: 20 }}
+                                  onClick={() => setDeleteConfirmId(null)}
+                                >
+                                  Cancel
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button className="btn-interact" style={{ ...S.btn("primary"), padding: "6px 12px", fontSize: 9, borderRadius: 20 }} onClick={() => openReportPreview(m)}>
+                                  Preview
+                                </button>
+                                <button className="btn-interact" style={{ ...S.btn(m.status === 'APPROVED' ? "success" : "default"), padding: "6px 12px", fontSize: 9, borderRadius: 20 }} disabled={m.status !== 'APPROVED'} onClick={() => openReportDownload(m)}>
+                                  Download
+                                </button>
+                                <button
+                                  className="btn-interact"
+                                  style={{ ...S.btn("error"), padding: "6px 12px", fontSize: 9, borderRadius: 20 }}
+                                  onClick={() => setDeleteConfirmId(m.id)}
+                                >
+                                  Delete
+                                </button>
+                              </>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
 
-              <div style={{ padding: "16px 0px", maxWidth: 1600, margin: "0 auto" }}>
-                {/* ── DASHBOARD VIEW ── */}
-                {view === "dashboard" && (
-                  <div>
-                    <div style={{ ...S.sectionTitle, marginBottom: 24, fontSize: 16 }}>Performance Dashboard</div>
-                    <div className="dashboard-grid">
-                      <div style={{ ...S.section, textAlign: 'center' }} className="entrance-fade">
-                        <div style={S.label}>Total Tested</div>
-                        <div style={{ fontSize: 42, fontWeight: 900, color: activeTheme.primary, margin: '10px 0' }}>{approvedMotors.length}</div>
-                        <div style={{ fontSize: 9, color: activeTheme.textMuted }}>APPROVED RECORDS</div>
+              {archiveSubTab === 'log' && (
+                <div style={{ ...S.section, overflowX: "auto" }}>
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ ...S.sectionTitle, marginBottom: 15, border: 'none' }}>Detailed Parameter Log</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 15 }}>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", background: activeTheme.surfaceAlt, padding: "5px 8px", borderRadius: 6, flex: 1 }}>
+                        <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1, color: activeTheme.primary, textTransform: 'uppercase' }}>Filter</span>
+                        <div style={{ width: 1, height: 16, background: activeTheme.border, margin: '0 2px' }} />
+                        <input style={{ ...S.input, width: 110, padding: '4px 8px', fontSize: 10 }} placeholder="Serial" value={filterSerial} onChange={e => setFilterSerial(e.target.value)} />
+                        <input style={{ ...S.input, width: 100, padding: '4px 8px', fontSize: 10 }} placeholder="Model" value={filterModel} onChange={e => setFilterModel(e.target.value)} />
+                        <input style={{ ...S.input, width: 100, padding: '4px 8px', fontSize: 10 }} placeholder="Program" value={filterProgram} onChange={e => setFilterProgram(e.target.value)} />
+                        <input type="date" style={{ ...S.input, width: 110, padding: '4px 8px', fontSize: 10 }} value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} />
+                        <span style={{ fontSize: 9, color: activeTheme.textMuted }}>to</span>
+                        <input type="date" style={{ ...S.input, width: 110, padding: '4px 8px', fontSize: 10 }} value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} />
                       </div>
-                      <div style={{ ...S.section, textAlign: 'center', borderLeft: `4px solid ${activeTheme.success}`, animationDelay: '0.1s' }} className="entrance-fade">
-                        <div style={S.label}>Passed</div>
-                        <div style={{ fontSize: 42, fontWeight: 900, color: activeTheme.success, margin: '10px 0' }}>{approvedMotors.filter(m => m.overallPass).length}</div>
-                        <div style={{ fontSize: 9, color: activeTheme.textMuted }}>COMPLIANT (APPROVED)</div>
-                      </div>
-                      <div style={{ ...S.section, textAlign: 'center', borderLeft: `4px solid ${activeTheme.error}`, animationDelay: '0.2s' }} className="entrance-fade">
-                        <div style={S.label}>Failed</div>
-                        <div style={{ fontSize: 42, fontWeight: 900, color: activeTheme.error, margin: '10px 0' }}>{approvedMotors.filter(m => !m.overallPass).length}</div>
-                        <div style={{ fontSize: 9, color: activeTheme.textMuted }}>NON-COMPLIANT (APPROVED)</div>
-                      </div>
-                      <div style={{ ...S.section, textAlign: 'center', background: `linear-gradient(135deg, ${activeTheme.surface} 0%, ${activeTheme.surfaceAlt} 100%)`, animationDelay: '0.4s' }} className="entrance-fade">
-                        <div style={S.label}>Pass Rate</div>
-                        <div style={{ fontSize: 42, fontWeight: 900, color: activeTheme.accent, margin: '10px 0' }}>
-                          {approvedMotors.length ? ((approvedMotors.filter(m => m.overallPass).length / approvedMotors.length) * 100).toFixed(1) : 0}%
-                        </div>
-                        <div style={{
-                          height: 4, width: '100%', background: activeTheme.border, borderRadius: 2, marginTop: 10, overflow: 'hidden'
-                        }}>
-                          <div style={{ height: '100%', width: approvedMotors.length ? `${(approvedMotors.filter(m => m.overallPass).length / approvedMotors.length) * 100}%` : '0%', background: activeTheme.accent }}></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* ── QI/PDI DASHBOARD VIEW ── */}
-                {view === "qi_pdi_dashboard" && (
-                  <div className="entrance-fade">
-                    <div style={{ ...S.sectionTitle, marginBottom: 24, fontSize: 16 }}>QI / PDI Performance Dashboard</div>
-                    <div className="dashboard-grid">
-                      <div style={{ ...S.section, textAlign: 'center' }}>
-                        <div style={S.label}>Total Inspections</div>
-                        <div style={{ fontSize: 42, fontWeight: 900, color: activeTheme.primary, margin: '10px 0' }}>{qiPdiReports.length}</div>
-                        <div style={{ fontSize: 9, color: activeTheme.textMuted }}>COMPLETED REPORTS</div>
-                      </div>
-                      <div style={{ ...S.section, textAlign: 'center' }}>
-                        <div style={S.label}>Motor Models</div>
-                        <div style={{ fontSize: 42, fontWeight: 900, color: activeTheme.accent, margin: '10px 0' }}>{[...new Set(qiPdiReports.map(r => r.motorModel))].length}</div>
-                        <div style={{ fontSize: 9, color: activeTheme.textMuted }}>UNIQUE MODELS INSPECTED</div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* ── GOLDEN SAMPLES VIEW ── */}
-                {view === "golden_samples" && (
-                  <div className="entrance-fade">
-                    <div style={{ ...S.sectionTitle, marginBottom: 24, fontSize: 16 }}>Golden Sample Configuration Management</div>
-
-                    {/* Golden Sub Tabs */}
-                    <div style={S.tabBar}>
-                      <button style={S.tabBtn(goldenSubTab === 'entry')} onClick={() => setGoldenSubTab('entry')}>Golden Sample Data Entry</button>
-                      <button style={S.tabBtn(goldenSubTab === 'list')} onClick={() => setGoldenSubTab('list')}>Configured Motor Models</button>
-                    </div>
-
-                    {goldenSubTab === 'entry' ? (
-                      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 24, alignItems: 'start' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                          <div style={S.section}>
-                            <div style={S.sectionTitle}>1. Basic Motor Identity & Limits</div>
-                            <div>
-                              <label style={S.label}>Model / Part No. <span style={{ color: activeTheme.error }}>*</span></label>
-                              <select
-                                style={{ ...S.input, padding: "8px 10px", flex: 1, opacity: uniqueModelPartOptions.length === 0 ? 0.6 : 1 }}
-                                value={uniqueModelPartOptions.findIndex(o => o.partNumber === goldenForm.motorCode && o.modelNumber === goldenForm.motorModel)}
-                                disabled={uniqueModelPartOptions.length === 0}
-                                onChange={e => {
-                                  const idx = parseInt(e.target.value, 10);
-                                  const opt = uniqueModelPartOptions[idx];
-                                  if (opt) {
-                                    // Check if a golden sample already exists for this part+model
-                                    const existing = goldenSamples.find(s =>
-                                      s.motorCode === opt.partNumber && s.motorModel === opt.modelNumber
-                                    );
-                                    if (existing) {
-                                      const pc = existing.performanceCurves && Array.isArray(existing.performanceCurves)
-                                        ? existing.performanceCurves : existing.performanceCurves
-                                          ? Object.keys(existing.performanceCurves).map(rpm => ({
-                                              rpm, torque: existing.performanceCurves[rpm],
-                                              power: existing.powerCurve?.[rpm] || "",
-                                              efficiency: existing.groupEff?.[rpm] || ""
-                                            }))
-                                          : [...initialPerformanceCurves];
-                                      setGoldenForm({
-                                        motorCode: opt.partNumber,
-                                        motorModel: opt.modelNumber,
-                                        nominalVoltage: existing.nominalVoltage || "",
-                                        peakPower: existing.peakPower || "",
-                                        peakTorque: existing.peakTorque || "",
-                                        peakCurrentAC: existing.peakCurrentAC || "",
-                                        maxSpeed: existing.maxSpeed || "",
-                                        bemfAt3000: existing.bemfAt3000 || "",
-                                        resistance: existing.resistance || "",
-                                        hipotLimit: existing.hipotLimit || "",
-                                        irLimit: existing.irLimit || "",
-                                        encoder: existing.encoder ? { ...existing.encoder } : { sineMin: "", sineMax: "", cosMin: "", cosMax: "", sinePP: "", cosPP: "", offset: "" },
-                                        performanceCurves: pc,
-                                      });
-                                      setEditingGoldenId(existing.id);
-                                    } else {
-                                      setGoldenForm(f => ({ ...f, motorCode: opt.partNumber, motorModel: opt.modelNumber }));
-                                      setEditingGoldenId(null);
-                                    }
-                                  }
-                                }}
-                              >
-                                <option value={-1}>{uniqueModelPartOptions.length === 0 ? "No parts available" : "Select Model / Part No."}</option>
-                                {uniqueModelPartOptions.map((opt, i) =>
-                                  <option key={i} value={i}>{opt.modelNumber} — {opt.partNumber}</option>
-                                )}
-                              </select>
-                            </div>
-                            <MField label="Motor Model Name" required value={goldenForm.motorModel} onChange={v => setGoldenForm({ ...goldenForm, motorModel: v })} S={S} theme={activeTheme} />
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                              <MField label="Nominal VDC" unit="V" required value={goldenForm.nominalVoltage} onChange={v => setGoldenForm({ ...goldenForm, nominalVoltage: v })} S={S} theme={activeTheme} />
-                              <MField label="Max Power" unit="kW" required value={goldenForm.peakPower} onChange={v => setGoldenForm({ ...goldenForm, peakPower: v })} S={S} theme={activeTheme} />
-                              <MField label="Max Torque" unit="Nm" required value={goldenForm.peakTorque} onChange={v => setGoldenForm({ ...goldenForm, peakTorque: v })} S={S} theme={activeTheme} />
-                              <MField label="Max Current" unit="A" required value={goldenForm.peakCurrentAC} onChange={v => setGoldenForm({ ...goldenForm, peakCurrentAC: v })} S={S} theme={activeTheme} />
-                              <MField label="Max Speed" unit="RPM" required value={goldenForm.maxSpeed} onChange={v => setGoldenForm({ ...goldenForm, maxSpeed: v })} S={S} theme={activeTheme} />
-                            </div>
-
-                            <div style={{ ...S.sectionTitle, fontSize: 11, marginTop: 18, borderBottom: 'none' }}>2. Electrical & Insulation Targets</div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                              <MField label="BEMF @ 3000" unit="V" required value={goldenForm.bemfAt3000} onChange={v => setGoldenForm({ ...goldenForm, bemfAt3000: v })} S={S} theme={activeTheme} />
-                              <MField label="Resistance" unit="mΩ" required value={goldenForm.resistance} onChange={v => setGoldenForm({ ...goldenForm, resistance: v })} S={S} theme={activeTheme} />
-                              <MField label="Hipot Limit" unit="mA" required value={goldenForm.hipotLimit} onChange={v => setGoldenForm({ ...goldenForm, hipotLimit: v })} S={S} theme={activeTheme} />
-                              <MField label="IR Min Limit" unit="MΩ" required value={goldenForm.irLimit} onChange={v => setGoldenForm({ ...goldenForm, irLimit: v })} S={S} theme={activeTheme} />
-                            </div>
-
-                            <div style={{ ...S.sectionTitle, fontSize: 11, marginTop: 18, borderBottom: 'none' }}>3. Resolver/Encoder Calibration Targets</div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                              <MField label="Sine Min" value={goldenForm.encoder.sineMin} onChange={v => setGoldenForm({ ...goldenForm, encoder: { ...goldenForm.encoder, sineMin: v } })} S={S} theme={activeTheme} required />
-                              <MField label="Sine Max" value={goldenForm.encoder.sineMax} onChange={v => setGoldenForm({ ...goldenForm, encoder: { ...goldenForm.encoder, sineMax: v } })} S={S} theme={activeTheme} required />
-                              <MField label="Cos Min" value={goldenForm.encoder.cosMin} onChange={v => setGoldenForm({ ...goldenForm, encoder: { ...goldenForm.encoder, cosMin: v } })} S={S} theme={activeTheme} required />
-                              <MField label="Cos Max" value={goldenForm.encoder.cosMax} onChange={v => setGoldenForm({ ...goldenForm, encoder: { ...goldenForm.encoder, cosMax: v } })} S={S} theme={activeTheme} required />
-                              <MField label="Sine P-P" value={goldenForm.encoder.sinePP} onChange={v => setGoldenForm({ ...goldenForm, encoder: { ...goldenForm.encoder, sinePP: v } })} S={S} theme={activeTheme} required />
-                              <MField label="Cos P-P" value={goldenForm.encoder.cosPP} onChange={v => setGoldenForm({ ...goldenForm, encoder: { ...goldenForm.encoder, cosPP: v } })} S={S} theme={activeTheme} required />
-                              <MField label="Calib Offset" value={goldenForm.encoder.offset} onChange={v => setGoldenForm({ ...goldenForm, encoder: { ...goldenForm.encoder, offset: v } })} S={S} theme={activeTheme} required />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div style={S.section}>
-                          <div style={S.sectionTitle}>4. Performance Curve Reference Points</div>
-                          <table style={{ ...S.table, marginBottom: 15 }}>
-                            <thead>
-                              <tr>
-                                <th style={S.th}>RPM</th>
-                                <th style={S.th}>Torque (Nm)</th>
-                                <th style={S.th}>Power (kW)</th>
-                                <th style={S.th}>Eff (%)</th>
-                                <th style={S.th}>Action</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {goldenForm.performanceCurves.map((row, idx) => (
-                                <tr key={idx}>
-                                  <td style={S.td}><input style={S.input} type="number" value={row.rpm} onChange={e => {
-                                    const newList = [...goldenForm.performanceCurves];
-                                    newList[idx].rpm = e.target.value;
-                                    setGoldenForm({ ...goldenForm, performanceCurves: newList });
-                                  }} /></td>
-                                  <td style={S.td}><input style={S.input} type="number" value={row.torque} onChange={e => {
-                                    const newList = [...goldenForm.performanceCurves];
-                                    newList[idx].torque = e.target.value;
-                                    setGoldenForm({ ...goldenForm, performanceCurves: newList });
-                                  }} /></td>
-                                  <td style={S.td}><input style={S.input} type="number" value={row.power} onChange={e => {
-                                    const newList = [...goldenForm.performanceCurves];
-                                    newList[idx].power = e.target.value;
-                                    setGoldenForm({ ...goldenForm, performanceCurves: newList });
-                                  }} /></td>
-                                  <td style={S.td}><input style={S.input} type="number" value={row.efficiency} onChange={e => {
-                                    const newList = [...goldenForm.performanceCurves];
-                                    newList[idx].efficiency = e.target.value;
-                                    setGoldenForm({ ...goldenForm, performanceCurves: newList });
-                                  }} /></td>
-                                  <td style={S.td}>
-                                    <button style={{ ...S.btn('error'), padding: '4px 8px', fontSize: 10 }} onClick={() => {
-                                      const newList = goldenForm.performanceCurves.filter((_, i) => i !== idx);
-                                      setGoldenForm({ ...goldenForm, performanceCurves: newList });
-                                    }}>Remove</button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                          <button style={{ ...S.btn('default'), width: '100%', marginBottom: 20 }} onClick={() => setGoldenForm({ ...goldenForm, performanceCurves: [...goldenForm.performanceCurves, { rpm: "", torque: "", power: "", efficiency: "" }] })}>+ Add Row</button>
-                          <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
-                            <button style={{ ...S.btn("primary"), flex: 1 }} onClick={saveGoldenSample}>💾 Save Configuration</button>
-                            <button style={{ ...S.btn("default"), flex: 1 }} onClick={resetGoldenForm}>🔄 Reset Form</button>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={S.section}>
-                        <div style={{ ...S.sectionTitle, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span>QI/PDI Reference Checklists</span>
-                          <button onClick={syncQiPdiRefSamples} style={{ ...S.btn('default'), padding: '4px 8px', fontSize: 10 }}>Refresh List</button>
-                        </div>
-                        <table style={S.table}>
-                          <thead>
-                            <tr>
-                              <th style={S.th}>Part No.</th>
-                              <th style={S.th}>Model Name</th>
-                              <th style={S.th}>Power (kW)</th>
-                              <th style={S.th}>Torque (Nm)</th>
-                              <th style={S.th}>BEMF (V)</th>
-                              <th style={S.th}>Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {goldenSamples.length === 0 ? (
-                              <tr><td colSpan="4" style={{ ...S.td, textAlign: 'center', color: activeTheme.textMuted }}>No models configured yet.</td></tr>
-                            ) : (
-                              goldenSamples.map((s) => (
-                                <tr key={s.id || s.motorModel} style={{ background: activeTheme.surface }}>
-                                  <td style={S.td}>{s.motorCode || 'N/A'}</td>
-                                  <td style={S.td}>{s.motorModel || 'N/A'}</td>
-                                  <td style={S.td}>{s.peakPower || 'N/A'} kW</td>
-                                  <td style={S.td}>{s.peakTorque || 'N/A'} Nm</td>
-                                  <td style={S.td}>{s.bemfAt3000 || 'N/A'} V</td>
-                                  <td style={{ ...S.td, display: 'flex', gap: 8 }}>
-                                    {canEditGolden && <button style={{ ...S.btn('primary'), padding: '4px 8px', fontSize: 10 }} onClick={() => handleEditGolden(s)}>Edit</button>}
-                                    <button style={{ ...S.btn('default'), padding: '4px 8px', fontSize: 10 }} onClick={() => setPreviewGolden(s)}>Preview</button>
-                                    {canEditGolden && <button style={{ ...S.btn('error'), padding: '4px 8px', fontSize: 10 }} onClick={() => handleDeleteGolden(s.id)}>Delete</button>}
-                                  </td>
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* ── QI/PDI REFERENCE SAMPLES VIEW ── */}
-                {view === "qi_pdi_ref_samples" && (
-                  <div className="entrance-fade">
-                    <div style={{ ...S.sectionTitle, marginBottom: 24, fontSize: 16 }}>QI/PDI Reference Samples (Checklists)</div>
-                    <div style={S.tabBar}>
-                      <button style={S.tabBtn(qiPdiRefSubTab === 'entry')} onClick={() => setQiPdiRefSubTab('entry')}>Setup Checklist</button>
-                      <button style={S.tabBtn(qiPdiRefSubTab === 'list')} onClick={() => setQiPdiRefSubTab('list')}>Configured Models</button>
-                    </div>
-
-                    {qiPdiRefSubTab === 'entry' ? (
-                      <div style={S.section}>
-                        <div>
-                          <label style={S.label}>Model / Part No. <span style={{ color: activeTheme.error }}>*</span></label>
-                          <select
-                            style={{ ...S.input, padding: "8px 10px", flex: 1, opacity: uniqueModelPartOptions.length === 0 ? 0.6 : 1 }}
-                            value={uniqueModelPartOptions.findIndex(o => o.partNumber === qiPdiRefForm.motorCode && o.modelNumber === qiPdiRefForm.motorModel)}
-                            disabled={uniqueModelPartOptions.length === 0}
-                            onChange={e => {
-                              const idx = parseInt(e.target.value, 10);
-                              const opt = uniqueModelPartOptions[idx];
-                              if (opt) {
-                                const existing = qiPdiRefSamples.find(s =>
-                                  s.motorCode === opt.partNumber && s.motorModel === opt.modelNumber
-                                );
-                                if (existing) {
-                                  setQiPdiRefForm({
-                                    motorCode: opt.partNumber,
-                                    motorModel: opt.modelNumber,
-                                    checklist: existing.checklist.map(i => ({ ...i })),
-                                  });
-                                  setEditingQiPdiRefId(existing.id);
-                                } else {
-                                  setQiPdiRefForm(f => ({ ...f, motorCode: opt.partNumber, motorModel: opt.modelNumber }));
-                                  setEditingQiPdiRefId(null);
-                                }
-                              }
-                            }}
-                          >
-                            <option value={-1}>{uniqueModelPartOptions.length === 0 ? "No parts available" : "Select Model / Part No."}</option>
-                            {uniqueModelPartOptions.map((opt, i) =>
-                              <option key={i} value={i}>{opt.modelNumber} — {opt.partNumber}</option>
-                            )}
-                          </select>
-                        </div>
-                        <MField label="Motor Model Name" required value={qiPdiRefForm.motorModel} onChange={v => setQiPdiRefForm({ ...qiPdiRefForm, motorModel: v })} S={S} theme={activeTheme} />
-                        <div style={{ ...S.sectionTitle, fontSize: 12, marginTop: 20 }}>Checklist Configuration</div>
-                        <table style={S.table}>
-                          <thead>
-                            <tr>
-                              <th style={S.th}>Description</th>
-                              <th style={S.th}>Spec</th>
-                              <th style={S.th}>Method</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {qiPdiRefForm.checklist.map((item, idx) => (
-                              <tr key={idx}>
-                                <td style={S.td}><input style={{ ...S.input, fontSize: 11 }} value={item.desc} onChange={e => {
-                                  const newList = [...qiPdiRefForm.checklist];
-                                  newList[idx] = { ...newList[idx], desc: e.target.value };
-                                  setQiPdiRefForm({ ...qiPdiRefForm, checklist: newList });
-                                }} /></td>
-                                <td style={S.td}><input style={{ ...S.input, fontSize: 11 }} value={item.spec} onChange={e => {
-                                  const newList = [...qiPdiRefForm.checklist];
-                                  newList[idx] = { ...newList[idx], spec: e.target.value };
-                                  setQiPdiRefForm({ ...qiPdiRefForm, checklist: newList });
-                                }} /></td>
-                                <td style={S.td}><input style={{ ...S.input, fontSize: 11 }} value={item.method} onChange={e => {
-                                  const newList = [...qiPdiRefForm.checklist];
-                                  newList[idx] = { ...newList[idx], method: e.target.value };
-                                  setQiPdiRefForm({ ...qiPdiRefForm, checklist: newList });
-                                }} /></td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                        <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
-                          <button
-                            style={{ ...S.btn(isSaving ? "default" : "primary"), flex: 1 }}
-                            onClick={saveQiPdiRef}
-                            disabled={isSaving}
-                          >
-                            {isSaving ? "Saving..." : "💾 Save Reference Checklist"}
-                          </button>
-                          <button style={{ ...S.btn("default"), flex: 1 }} onClick={() => {
-                            setQiPdiRefForm({ motorCode: "", motorModel: "", checklist: QI_PDI_DEFAULTS.map(i => ({ ...i })) });
-                            setEditingQiPdiRefId(null);
-                          }}>🔄 Reset</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={S.section}>
-                        <table style={S.table}>
-                          <thead>
-                            <tr>
-                              <th style={S.th}>Part No.</th>
-                              <th style={S.th}>Model Name</th>
-                              <th style={S.th}>Checks Count</th>
-                              <th style={S.th}>Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {qiPdiRefSamples.length === 0 ? (
-                              <tr><td colSpan="3" style={{ ...S.td, textAlign: 'center', color: activeTheme.textMuted }}>No reference checklists found.</td></tr>
-                            ) : (
-                              qiPdiRefSamples.map((s) => (
-                                <tr key={s.id} style={{ background: activeTheme.surface }}>
-                                  <td style={S.td}>{s.motorCode}</td>
-                                  <td style={S.td}>{s.motorModel}</td>
-                                  <td style={S.td}>{s.checklist.length} items</td>
-                                  <td style={{ ...S.td, display: 'flex', gap: 8 }}>
-                                    {canEditQiRef && <button style={{ ...S.btn('primary'), padding: '4px 8px', fontSize: 10 }} onClick={() => handleEditQiPdiRef(s)}>Edit</button>}
-                                    {canEditQiRef && <button style={{ ...S.btn('error'), padding: '4px 8px', fontSize: 10 }} onClick={() => handleDeleteQiPdiRef(s.id)}>Delete</button>}
-                                  </td>
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* ── GOLDEN SAMPLE PREVIEW MODAL ── */}
-                {previewGolden && (
-                  <div style={{ position: 'fixed', inset: 0, zIndex: 1300, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-                    <div style={{ ...S.section, maxWidth: 900, width: '100%', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
-                      <button style={{ position: 'absolute', top: 15, right: 15, ...S.btn('default'), padding: '5px 10px' }} onClick={() => setPreviewGolden(null)}>✕</button>
-                      <div style={{ ...S.sectionTitle, fontSize: 16 }}>Configuration Preview: {previewGolden.motorCode}</div>
-
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                        <div>
-                          <div style={S.label}>Basic Reference</div>
-                          <div style={{ fontSize: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 15px', background: activeTheme.surfaceAlt, padding: 12, borderRadius: 8 }}>
-                            <span>Part No.: <b>{previewGolden.motorCode}</b></span>
-                            <span>Nominal VDC: <b>{previewGolden.nominalVoltage} V</b></span>
-                            <span>Max Power: <b>{previewGolden.peakPower} kW</b></span>
-                            <span>Max Torque: <b>{previewGolden.peakTorque} Nm</b></span>
-                            <span>Max Current: <b>{previewGolden.peakCurrentAC} A</b></span>
-                            <span>Max Speed: <b>{previewGolden.maxSpeed} RPM</b></span>
-                            <span>BEMF @ 3000: <b>{previewGolden.bemfAt3000} V</b></span>
-                          </div>
-                        </div>
-                        <div>
-                          <div style={S.label}>Encoder Limits</div>
-                          <div style={{ fontSize: 11, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 10px' }}>
-                            {previewGolden.encoder ? Object.entries(previewGolden.encoder).map(([k, v]) => (
-                              <span key={k}>{k}: <b>{v}</b></span>
-                            )) : <span style={{ gridColumn: '1 / -1', color: activeTheme.textMuted }}>No encoder data</span>}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div style={{ marginTop: 20 }}>
-                        <div style={S.label}>Reference Curves</div>
-                        <div style={{ display: 'flex', gap: 16 }}>
-                          <PerfChart
-                            title="Torque Reference"
-                            unit="Nm"
-                            data={previewGolden.performanceCurves
-                              ? previewGolden.performanceCurves.map(c => ({ speed: c.rpm, Golden: c.torque }))
-                              : Object.entries(previewGolden.torqueCurve || {}).map(([s, v]) => ({ speed: s, Golden: v }))
-                            }
-                            gsKey="Golden"
-                            theme={activeTheme}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* ── CONSOLIDATED ARCHIVE VIEW (History + Log + PDI Reports) ── */}
-                {view === "archive" && (
-                  <div className="entrance-fade">
-                    <div style={{ ...S.sectionTitle, marginBottom: 24, fontSize: 16 }}>Reports Archive</div>
-
-                    {/* Sub-navigation tabs for Archive */}
-                    <div style={{ display: 'flex', gap: 4, alignItems: 'stretch', borderBottom: `1px solid ${activeTheme.border}`, paddingBottom: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-                      {/* EOL Archive Group */}
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                        <div style={{ fontSize: 8, fontWeight: 900, letterSpacing: 1.5, color: activeTheme.primary, textTransform: 'uppercase', padding: '0 4px', lineHeight: '12px' }}>EOL</div>
-                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                          <button style={S.tabBtn(archiveSubTab === 'summary')} onClick={() => { setArchiveSubTab('summary'); setArchiveMode('eol'); }}>History Summary</button>
-                          <button style={S.tabBtn(archiveSubTab === 'log')} onClick={() => { setArchiveSubTab('log'); setArchiveMode('eol'); }}>Detailed Parameter Log</button>
-                        </div>
-                      </div>
-
-                      <div style={{ width: 3, background: activeTheme.textMuted, borderRadius: 2, margin: '0 8px', flexShrink: 0 }} />
-
-                      {/* PDI Archive Group */}
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                        <div style={{ fontSize: 8, fontWeight: 900, letterSpacing: 1.5, color: activeTheme.primary, textTransform: 'uppercase', padding: '0 4px', lineHeight: '12px' }}>PDI</div>
-                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                          <button style={S.tabBtn(archiveSubTab === 'pdi')} onClick={() => { setArchiveSubTab('pdi'); setArchiveMode('pdi'); }}>PDI Reports Log</button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {archiveSubTab === 'summary' && (
-                      <div style={S.section}>
-                        <div style={{ marginBottom: 20 }}>
-                          <div style={{ ...S.sectionTitle, marginBottom: 15, border: 'none' }}>Approved Summary</div>
-                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", background: activeTheme.surfaceAlt, padding: "5px 8px", borderRadius: 6 }}>
-                            <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1, color: activeTheme.primary, textTransform: 'uppercase' }}>Filter</span>
-                            <div style={{ width: 1, height: 16, background: activeTheme.border, margin: '0 2px' }} />
-                            <input style={{ ...S.input, width: 110, padding: '4px 8px', fontSize: 10 }} placeholder="Serial" value={filterSerial} onChange={e => setFilterSerial(e.target.value)} />
-                            <input style={{ ...S.input, width: 100, padding: '4px 8px', fontSize: 10 }} placeholder="Model" value={filterModel} onChange={e => setFilterModel(e.target.value)} />
-                            <input style={{ ...S.input, width: 100, padding: '4px 8px', fontSize: 10 }} placeholder="Program" value={filterProgram} onChange={e => setFilterProgram(e.target.value)} />
-                            <input type="date" style={{ ...S.input, width: 110, padding: '4px 8px', fontSize: 10 }} value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} />
-                            <span style={{ fontSize: 9, color: activeTheme.textMuted }}>to</span>
-                            <input type="date" style={{ ...S.input, width: 110, padding: '4px 8px', fontSize: 10 }} value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} />
-                          </div>
-                        </div>
-                        <table style={S.table}>
-                          <thead>
-                            <tr>
-                              <th style={S.th}>Date</th>
-                              <th style={S.th}>Serial No</th>
-                              <th style={S.th}>Model</th>
-                              <th style={S.th}>Status</th>
-                              <th style={S.th}>Action</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {filteredMotors.filter(m => m.status === 'APPROVED').slice().reverse().map((m, i) => (
-                              <tr key={i} className="table-row-hover">
-                                <td style={S.td}>{m.timestamp.slice(0, 10)}</td>
-                                <td style={S.td}>{m.form.serialNo}</td>
-                                <td style={S.td}>{m.form.motorModel}</td>
-                                <td style={S.td}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                    <Badge pass={m.overallPass} theme={activeTheme} />
-                                    <span style={{ fontSize: 9, color: activeTheme.textMuted }}>{m.status?.replace('_', ' ') || 'Pending'}</span>
-                                  </div>
-                                </td>
-                                <td style={{ ...S.td, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                                  {deleteConfirmId === m.id ? (
-                                    <>
-                                      <span style={{ fontSize: 9, fontWeight: 700, color: activeTheme.error }}>Are you sure?</span>
-                                      <button
-                                        className="btn-interact"
-                                        style={{ ...S.btn("error"), padding: "6px 12px", fontSize: 9, borderRadius: 20 }}
-                                        onClick={() => handleDelete(m)}
-                                      >
-                                        Confirm
-                                      </button>
-                                      <button
-                                        className="btn-interact"
-                                        style={{ ...S.btn("default"), padding: "6px 12px", fontSize: 9, borderRadius: 20 }}
-                                        onClick={() => setDeleteConfirmId(null)}
-                                      >
-                                        Cancel
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <button className="btn-interact" style={{ ...S.btn("primary"), padding: "6px 12px", fontSize: 9, borderRadius: 20 }} onClick={() => openReportPreview(m)}>
-                                        Preview
-                                      </button>
-                                      <button className="btn-interact" style={{ ...S.btn(m.status === 'APPROVED' ? "success" : "default"), padding: "6px 12px", fontSize: 9, borderRadius: 20 }} disabled={m.status !== 'APPROVED'} onClick={() => openReportDownload(m)}>
-                                        Download
-                                      </button>
-                                      <button
-                                        className="btn-interact"
-                                        style={{ ...S.btn("error"), padding: "6px 12px", fontSize: 9, borderRadius: 20 }}
-                                        onClick={() => setDeleteConfirmId(m.id)}
-                                      >
-                                        Delete
-                                      </button>
-                                    </>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-
-                    {archiveSubTab === 'log' && (
-                      <div style={{ ...S.section, overflowX: "auto" }}>
-                        <div style={{ marginBottom: 20 }}>
-                          <div style={{ ...S.sectionTitle, marginBottom: 15, border: 'none' }}>Detailed Parameter Log</div>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 15 }}>
-                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", background: activeTheme.surfaceAlt, padding: "5px 8px", borderRadius: 6, flex: 1 }}>
-                              <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1, color: activeTheme.primary, textTransform: 'uppercase' }}>Filter</span>
-                              <div style={{ width: 1, height: 16, background: activeTheme.border, margin: '0 2px' }} />
-                              <input style={{ ...S.input, width: 110, padding: '4px 8px', fontSize: 10 }} placeholder="Serial" value={filterSerial} onChange={e => setFilterSerial(e.target.value)} />
-                              <input style={{ ...S.input, width: 100, padding: '4px 8px', fontSize: 10 }} placeholder="Model" value={filterModel} onChange={e => setFilterModel(e.target.value)} />
-                              <input style={{ ...S.input, width: 100, padding: '4px 8px', fontSize: 10 }} placeholder="Program" value={filterProgram} onChange={e => setFilterProgram(e.target.value)} />
-                              <input type="date" style={{ ...S.input, width: 110, padding: '4px 8px', fontSize: 10 }} value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} />
-                              <span style={{ fontSize: 9, color: activeTheme.textMuted }}>to</span>
-                              <input type="date" style={{ ...S.input, width: 110, padding: '4px 8px', fontSize: 10 }} value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} />
-                            </div>
-                            <button
-                              className="btn-interact"
-                              style={{ ...S.btn("success"), padding: "8px 16px", fontSize: 11, borderRadius: 20 }}
-                              onClick={handleExportMotorLog}
-                            >
-                              📊 Export to Excel
-                            </button>
-                          </div>
-                        </div>
-                        <table style={{ ...S.table, minWidth: 3200 }}>
-                          <thead>
-                            <tr>
-                              <th style={S.th}>Serial No</th>
-                              <th style={S.th}>Date</th>
-                              <th style={S.th}>Program</th>
-                              <th style={S.th}>Model</th>
-                              <th style={S.th}>Part No.</th>
-                              <th style={S.th}>Tested By</th>
-                              <th style={S.th}>Peak Torque (Nm)</th>
-                              <th style={S.th}>Peak Power (kW)</th>
-                              <th style={S.th}>BEMF 3000 (V)</th>
-                              <th style={S.th}>Torque Adj (Nm)</th>
-                              <th style={S.th}>Hipot U (mA)</th>
-                              <th style={S.th}>Hipot V (mA)</th>
-                              <th style={S.th}>Hipot W (mA)</th>
-                              <th style={S.th}>IR U (MΩ)</th>
-                              <th style={S.th}>IR V (MΩ)</th>
-                              <th style={S.th}>IR W (MΩ)</th>
-                              <th style={S.th}>Res U (mΩ)</th>
-                              <th style={S.th}>Res V (mΩ)</th>
-                              <th style={S.th}>Res W (mΩ)</th>
-                              <th style={S.th}>Sine Min</th>
-                              <th style={S.th}>Sine Max</th>
-                              <th style={S.th}>Cos Min</th>
-                              <th style={S.th}>Cos Max</th>
-                              <th style={S.th}>Sine PP</th>
-                              <th style={S.th}>Cos PP</th>
-                              <th style={S.th}>Offset</th>
-                              <th style={S.th}>Result</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {filteredMotors.filter(m => m.status === 'APPROVED').slice().reverse().map((m, i) => {
-                              const d = computeMotorReportData(m, goldenSamples);
-                              return (
-                                <tr key={m.id} className="table-row-hover" style={{ background: i % 2 === 0 ? activeTheme.surfaceAlt : activeTheme.surface }}>
-                                  <td style={S.td}>{m.form.serialNo}</td>
-                                  <td style={S.td}>{m.form.testDate}</td>
-                                  <td style={S.td}>{m.form.programName}</td>
-                                  <td style={S.td}>{m.form.motorModel}</td>
-                                  <td style={S.td}>{m.form.motorCode}</td>
-                                  <td style={S.td}>{m.form.testedBy}</td>
-                                  <td style={{ ...S.td, fontWeight: 700, color: activeTheme.primary }}>{d.peakTorqueDUT.toFixed(2)}</td>
-                                  <td style={{ ...S.td, fontWeight: 700, color: activeTheme.primary }}>{d.peakPowerDUT_kW.toFixed(2)}</td>
-                                  <td style={S.td}>{d.bemf3000 !== null ? d.bemf3000.toFixed(2) : "—"}</td>
-                                  <td style={S.td}>{m.torqueAdj || "0"}</td>
-                                  <td style={S.td}>{m.form.hipotU}</td>
-                                  <td style={S.td}>{m.form.hipotV}</td>
-                                  <td style={S.td}>{m.form.hipotW}</td>
-                                  <td style={S.td}>{m.form.irU}</td>
-                                  <td style={S.td}>{m.form.irV}</td>
-                                  <td style={S.td}>{m.form.irW}</td>
-                                  <td style={S.td}>{m.form.resU}</td>
-                                  <td style={S.td}>{m.form.resV}</td>
-                                  <td style={S.td}>{m.form.resW}</td>
-                                  <td style={S.td}>{m.form.sineMin}</td>
-                                  <td style={S.td}>{m.form.sineMax}</td>
-                                  <td style={S.td}>{m.form.cosMin}</td>
-                                  <td style={S.td}>{m.form.cosMax}</td>
-                                  <td style={S.td}>{m.form.sinePP}</td>
-                                  <td style={S.td}>{m.form.cosPP}</td>
-                                  <td style={S.td}>{m.form.offset}</td>
-                                  <td style={S.td}>
-                                    <Badge pass={d.overallPass} theme={activeTheme} />
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-
-                    {archiveSubTab === 'pdi' && (
-                      <div style={S.section}>
-                        <div style={{ marginBottom: 20 }}>
-                          <div style={{ ...S.sectionTitle, marginBottom: 15, border: 'none' }}>QI / PDI Reports Archive</div>
-                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", background: activeTheme.surfaceAlt, padding: "5px 8px", borderRadius: 6 }}>
-                            <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1, color: activeTheme.primary, textTransform: 'uppercase' }}>Filter</span>
-                            <div style={{ width: 1, height: 16, background: activeTheme.border, margin: '0 2px' }} />
-                            <input style={{ ...S.input, width: 110, padding: '4px 8px', fontSize: 10 }} placeholder="Serial" value={filterQiPdiSerial} onChange={e => setFilterQiPdiSerial(e.target.value)} />
-                            <input style={{ ...S.input, width: 100, padding: '4px 8px', fontSize: 10 }} placeholder="Model" value={filterQiPdiModel} onChange={e => setFilterQiPdiModel(e.target.value)} />
-                            <input type="date" style={{ ...S.input, width: 110, padding: '4px 8px', fontSize: 10 }} value={filterQiPdiDateFrom} onChange={e => setFilterQiPdiDateFrom(e.target.value)} />
-                            <span style={{ fontSize: 9, color: activeTheme.textMuted }}>to</span>
-                            <input type="date" style={{ ...S.input, width: 110, padding: '4px 8px', fontSize: 10 }} value={filterQiPdiDateTo} onChange={e => setFilterQiPdiDateTo(e.target.value)} />
-                          </div>
-                        </div>
-                        <table style={S.table}>
-                          <thead>
-                            <tr>
-                              <th style={S.th}>Date</th>
-                              <th style={S.th}>Serial No</th>
-                              <th style={S.th}>Model</th>
-                              <th style={S.th}>Tested By</th>
-                              <th style={S.th}>Result</th>
-                              <th style={S.th}>Action</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {filteredQiPdiReports.length === 0 ? (
-                              <tr><td colSpan="5" style={{ ...S.td, textAlign: 'center', color: activeTheme.textMuted }}>No reports found.</td></tr>
-                            ) : (
-                              filteredQiPdiReports.slice().reverse().map((r, i) => (
-                                <tr key={r.id} className="table-row-hover">
-                                  <td style={S.td}>{r.timestamp?.slice(0, 10) || "—"}</td>
-                                  <td style={S.td}>{r.serialNo}</td>
-                                  <td style={S.td}>{r.motorModel}</td>
-                                  <td style={S.td}>{r.testedBy}</td>
-                                  <td style={S.td}>
-                                    <Badge pass={r.data && r.data.filter(i => i.no !== 21).every(item => item.status === "OK" || item.status === "NOT OK, But Motor Performance Not Impacted")} theme={activeTheme} />
-                                  </td>
-                                  <td style={{ ...S.td, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                                    {deleteQiPdiConfirmId === r.id ? (
-                                      <>
-                                        <span style={{ fontSize: 9, fontWeight: 700, color: activeTheme.error }}>Are you sure?</span>
-                                        <button className="btn-interact" style={{ ...S.btn("error"), padding: "6px 12px", fontSize: 9, borderRadius: 20 }} onClick={() => handleDeleteQiPdi(r.id)}>Confirm</button>
-                                        <button className="btn-interact" style={{ ...S.btn("default"), padding: "6px 12px", fontSize: 9, borderRadius: 20 }} onClick={() => setDeleteQiPdiConfirmId(null)}>Cancel</button>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <button className="btn-interact" style={{ ...S.btn("primary"), padding: "6px 12px", fontSize: 9, borderRadius: 20 }} onClick={() => openQiPdiPreview(r)}>Preview</button>
-                                        <button className="btn-interact" style={{ ...S.btn("success"), padding: "6px 12px", fontSize: 9, borderRadius: 20 }} onClick={() => openQiPdiDownload(r)}>Download</button>
-                                        <button className="btn-interact" style={{ ...S.btn("error"), padding: "6px 12px", fontSize: 9, borderRadius: 20 }} onClick={() => setDeleteQiPdiConfirmId(r.id)}>Delete</button>
-                                      </>
-                                    )}
-                                  </td>
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* ── STEP 0: Data Entry (Merged Upload & Manual) ── */}
-                {view === "new_report" && step === 0 && (
-                  <div>
-                    {/* Progress Bar & Actions */}
-                    <div style={{ ...S.section, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 24px", marginBottom: 20, borderLeft: `6px solid ${activeTheme.primary}` }} className="entrance-fade">
-                      <div style={{ flex: 1 }}>
-                        <div style={{ ...S.label, color: activeTheme.primary, fontSize: 11 }}>Report Completion Progress</div>
-                        <div style={{ height: 6, background: activeTheme.border, borderRadius: 3, marginTop: 8, position: "relative", overflow: "hidden" }}>
-                          <div style={{ height: "100%", width: `${totalProgress}%`, background: `linear-gradient(90deg, ${activeTheme.primary}, ${activeTheme.accent})`, transition: "width 0.8s cubic-bezier(0.65, 0, 0.35, 1)" }}></div>
-                        </div>
-                      </div>
-                      <div style={{ marginLeft: 32, display: "flex", alignItems: "center", gap: 16 }}>
-                        <div style={{ fontSize: 24, fontWeight: 900, color: activeTheme.primary, fontVariantNumeric: "tabular-nums" }}>{totalProgress}%</div>
-                        <button onClick={resetForm} style={{ ...S.btn("default"), padding: "6px 12px", fontSize: 11 }}>Reset Form</button>
-                      </div>
-                    </div>
-
-                    {/* Correction Note Display */}
-                    {selectedMotor && selectedMotor.comment && (
-                      <div style={{ ...S.section, borderLeft: `4px solid ${activeTheme.error}`, background: activeTheme.error + '08', padding: '16px 24px', marginBottom: 20 }} className="entrance-fade">
-                        <div style={{ fontSize: 11, fontWeight: 800, color: activeTheme.error, letterSpacing: 1, marginBottom: 4 }}>CORRECTION REQUIRED:</div>
-                        <div style={{ fontSize: 14, fontWeight: 500, color: activeTheme.text }}>{selectedMotor.comment}</div>
-                        <div style={{ fontSize: 10, color: activeTheme.textMuted, marginTop: 8 }}>Please update the fields below and regenerate the report to resubmit for check.</div>
-                      </div>
-                    )}
-
-                    {/* Manual Entry Section */}
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 16, marginBottom: 20 }}>
-                      {/* Motor Identity */}
-                      <div className="entrance-fade" style={{ ...S.section, animationDelay: '0.1s', marginBottom: 0 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                          <div style={{ ...S.sectionTitle, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <SectionIcon type="identity" color={activeTheme.primary} />
-                            Motor Identity
-                          </div>
-                          {sectionProgress.identity === 7 && <span style={{ color: activeTheme.success, fontSize: 10, fontWeight: 800 }}>✓ COMPLETE</span>}
-                        </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 10px" }}>
-                          <div style={{ gridColumn: "1 / -1", marginBottom: 4 }}>
-                            <label style={S.label}>Work Order <span style={{ color: activeTheme.error }}>*</span></label>
-                            <select
-                              style={{ ...S.input, padding: "8px 10px", flex: 1, opacity: workOrders.length === 0 ? 0.6 : 1 }}
-                              value={form.workOrderId}
-                              disabled={workOrders.length === 0}
-                              onChange={e => handleWorkOrderChange(e.target.value)}
-                            >
-                              <option value="">{workOrders.length === 0 ? "No work orders available" : "Select Work Order"}</option>
-                              {workOrders.map(wo => {
-                                const prog = programs.find(p => p.id === wo.programId);
-                                return <option key={wo.id} value={wo.id}>{wo.refId} - {wo.title} {prog ? `(${prog.name})` : ''}</option>;
-                              })}
-                            </select>
-                          </div>
-                          <div style={{ gridColumn: "1 / -1", marginBottom: 4 }}>
-                            <label style={S.label}>Model / Part <span style={{ color: activeTheme.error }}>*</span></label>
-                            <select
-                              style={{ ...S.input, padding: "8px 10px", flex: 1, opacity: !selectedWO ? 0.6 : 1 }}
-                              value={form.itemIdx}
-                              disabled={!selectedWO}
-                              onChange={e => handleItemChange(e.target.value)}
-                            >
-                              <option value="">{selectedWO ? "Select Model/Part" : "Select a Work Order first"}</option>
-                              {selectedWO && selectedWO.items.map((item, idx) =>
-                                <option key={idx} value={idx}>{item.modelNumber} - {item.partNumber}</option>
-                              )}
-                            </select>
-                          </div>
-                          <MField label="Serial No" required value={form.serialNo} onChange={F("serialNo")} S={S} theme={activeTheme} disabled={!canEditValidation} />
-                          <MField label="Test Date" required type="date" value={form.testDate} onChange={F("testDate")} S={S} theme={activeTheme} disabled={!canEditValidation} />
-                          <div style={{ marginBottom: 10 }}>
-                            <label style={S.label}>Part No. <span style={{ color: activeTheme.error }}>*</span></label>
-                            <select
-                              style={{ ...S.input, padding: "8px 10px", flex: 1, opacity: !canEditValidation ? 0.6 : 1 }}
-                              value={form.motorCode}
-                              disabled={!canEditValidation}
-                              onChange={e => {
-                                const sample = goldenSamples.find(s => s.motorCode === e.target.value);
-                                if (sample) {
-                                  setForm(f => ({ ...f, motorCode: sample.motorCode, motorModel: sample.motorModel }));
-                                } else {
-                                  setForm(f => ({ ...f, motorCode: "", motorModel: "" }));
-                                }
-                              }}
-                            >
-                              <option value="">Select Part No.</option>
-                              {goldenSamples.map(s => <option key={s.motorCode} value={s.motorCode}>{s.motorCode}</option>)}
-                            </select>
-                          </div>
-                          <MField label="Motor Model" required value={form.motorModel} onChange={F("motorModel")} S={S} theme={activeTheme} disabled={!canEditValidation} />
-                          <MField label="Tested By" required value={form.testedBy} onChange={F("testedBy")} S={S} theme={activeTheme} disabled={!canEditValidation} />
-                        </div>
-                      </div>
-
-                      {/* PDI */}
-                      <div className="entrance-fade" style={{ ...S.section, animationDelay: '0.2s', marginBottom: 0 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                          <div style={{ ...S.sectionTitle, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <SectionIcon type="pdi" color={activeTheme.primary} />
-                            PDI // Electrical
-                          </div>
-                          {sectionProgress.pdi === 9 && <span style={{ color: activeTheme.success, fontSize: 10, fontWeight: 800 }}>✓ COMPLETE</span>}
-                        </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 10px" }}>
-                          <MField label="Hipot U" required unit="mA" value={form.hipotU} onChange={F("hipotU")} passCheck={activeGolden ? v => v > 0 && v < (activeGolden.hipotLimit) : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
-                          <MField label="Hipot V" required unit="mA" value={form.hipotV} onChange={F("hipotV")} passCheck={activeGolden ? v => v > 0 && v < (activeGolden.hipotLimit) : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
-                          <MField label="Hipot W" required unit="mA" value={form.hipotW} onChange={F("hipotW")} passCheck={activeGolden ? v => v > 0 && v < (activeGolden.hipotLimit) : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
-                          <MField label="IR U" required unit="MΩ" value={form.irU} onChange={F("irU")} passCheck={activeGolden ? v => v >= (activeGolden.irLimit) : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
-                          <MField label="IR V" required unit="MΩ" value={form.irV} onChange={F("irV")} passCheck={activeGolden ? v => v >= (activeGolden.irLimit) : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
-                          <MField label="IR W" required unit="MΩ" value={form.irW} onChange={F("irW")} passCheck={activeGolden ? v => v >= (activeGolden.irLimit) : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
-                          <MField label="Res U" required unit="mΩ" value={form.resU} onChange={F("resU")} passCheck={activeGolden ? v => Math.abs(v - (activeGolden.resistance)) <= 3 : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
-                          <MField label="Res V" required unit="mΩ" value={form.resV} onChange={F("resV")} passCheck={activeGolden ? v => Math.abs(v - (activeGolden.resistance)) <= 3 : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
-                          <MField label="Res W" required unit="mΩ" value={form.resW} onChange={F("resW")} passCheck={activeGolden ? v => Math.abs(v - (activeGolden.resistance)) <= 3 : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
-                        </div>
-                      </div>
-                      {/* Encoder */}
-                      <div className="entrance-fade" style={{ ...S.section, animationDelay: '0.3s', marginBottom: 0 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                          <div style={{ ...S.sectionTitle, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <SectionIcon type="encoder" color={activeTheme.primary} />
-                            Encoder
-                          </div>
-                          {sectionProgress.encoder === 7 && <span style={{ color: activeTheme.success, fontSize: 10, fontWeight: 800 }}>✓ COMPLETE</span>}
-                        </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 10px" }}>
-                          <MField label="Sine Min" required unit="cts" value={form.sineMin} onChange={F("sineMin")} passCheck={activeGolden ? v => Math.abs(v - (activeGolden.encoder?.sineMin || 0)) <= 75 : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
-                          <MField label="Sine Max" required unit="cts" value={form.sineMax} onChange={F("sineMax")} passCheck={activeGolden ? v => Math.abs(v - (activeGolden.encoder?.sineMax || 0)) <= 75 : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
-                          <MField label="Cos Min" required unit="cts" value={form.cosMin} onChange={F("cosMin")} passCheck={activeGolden ? v => Math.abs(v - (activeGolden.encoder?.cosMin || 0)) <= 75 : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
-                          <MField label="Cos Max" required unit="cts" value={form.cosMax} onChange={F("cosMax")} passCheck={activeGolden ? v => Math.abs(v - (activeGolden.encoder?.cosMax || 0)) <= 75 : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
-                          <MField label="Sine P-P" required unit="cts" value={form.sinePP} onChange={F("sinePP")} passCheck={activeGolden ? v => Math.abs(v - (activeGolden.encoder?.sinePP || 0)) <= 150 : null} S={S} theme={activeTheme} disabled />
-                          <MField label="Cos P-P" required unit="cts" value={form.cosPP} onChange={F("cosPP")} passCheck={activeGolden ? v => Math.abs(v - (activeGolden.encoder?.cosPP || 0)) <= 150 : null} S={S} theme={activeTheme} disabled />
-                          <MField label="Offset" required unit="cts" value={form.offset} onChange={F("offset")} passCheck={activeGolden ? v => Math.abs(v - (activeGolden.encoder?.offset || 0)) <= 3 : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
-                        </div>
-                      </div>
-
-                      {/* Zone A Upload */}
-                      <div className="entrance-fade" style={{ ...S.section, animationDelay: '0.4s', marginBottom: 0 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                          <div style={{ ...S.sectionTitle, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <SectionIcon type="upload" color={activeTheme.primary} />
-                            Peak Power Data
-                          </div>
-                          {ppData.length > 0 && <span style={{ color: activeTheme.success, fontSize: 10, fontWeight: 800 }}>✓ UPLOADED</span>}
-                        </div>
-                        <UploadZone
-                          label=""
-                          accept=".xlsx,.csv"
-                          onFile={parsePP}
-                          parsed={adjustedPpData}
-                          fileName={ppName}
-                          S={S}
-                          theme={activeTheme}
-                          disabled={!canEditValidation}
-                        />
-                        <div style={{ marginTop: 16 }}>
-                          <MField label="Torque Adjustment" required unit="Nm" value={torqueAdj} onChange={setTorqueAdj} S={S} theme={activeTheme} disabled={!canEditValidation} />
-                        </div>
-                      </div>
-
-                      {/* Zone B Upload */}
-                      <div className="entrance-fade" style={{ ...S.section, animationDelay: '0.5s', marginBottom: 0 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                          <div style={{ ...S.sectionTitle, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <SectionIcon type="upload" color={activeTheme.primary} />
-                            BEMF Test Data
-                          </div>
-                          {bemfData.length > 0 && <span style={{ color: activeTheme.success, fontSize: 10, fontWeight: 800 }}>✓ UPLOADED</span>}
-                        </div>
-                        <UploadZone
-                          label=""
-                          accept=".xlsx,.csv"
-                          onFile={parseBEMF}
-                          parsed={bemfData}
-                          fileName={bemfName}
-                          S={S}
-                          theme={activeTheme}
-                          disabled={!canEditValidation}
-                        />
-                      </div>
-                    </div>
-
-                    <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 24 }}>
                       <button
                         className="btn-interact"
-                        style={S.btn(canGenerate && canEditValidation ? "primary" : "default")}
-                        onClick={handleGenerate}
-                        disabled={!canGenerate || isSaving || !canEditValidation}
-                        title={tooltipText}
+                        style={{ ...S.btn("success"), padding: "8px 16px", fontSize: 11, borderRadius: 20 }}
+                        onClick={handleExportMotorLog}
                       >
-                        {isSaving ? "Saving..." : "Save & Generate →"}
+                        📊 Export to Excel
                       </button>
                     </div>
                   </div>
-                )}
+                  <table style={{ ...S.table, minWidth: 3200 }}>
+                    <thead>
+                      <tr>
+                        <th style={S.th}>Serial No</th>
+                        <th style={S.th}>Date</th>
+                        <th style={S.th}>Program</th>
+                        <th style={S.th}>Model</th>
+                        <th style={S.th}>Part No.</th>
+                        <th style={S.th}>Tested By</th>
+                        <th style={S.th}>Peak Torque (Nm)</th>
+                        <th style={S.th}>Peak Power (kW)</th>
+                        <th style={S.th}>BEMF 3000 (V)</th>
+                        <th style={S.th}>Torque Adj (Nm)</th>
+                        <th style={S.th}>Hipot U (mA)</th>
+                        <th style={S.th}>Hipot V (mA)</th>
+                        <th style={S.th}>Hipot W (mA)</th>
+                        <th style={S.th}>IR U (MΩ)</th>
+                        <th style={S.th}>IR V (MΩ)</th>
+                        <th style={S.th}>IR W (MΩ)</th>
+                        <th style={S.th}>Res U (mΩ)</th>
+                        <th style={S.th}>Res V (mΩ)</th>
+                        <th style={S.th}>Res W (mΩ)</th>
+                        <th style={S.th}>Sine Min</th>
+                        <th style={S.th}>Sine Max</th>
+                        <th style={S.th}>Cos Min</th>
+                        <th style={S.th}>Cos Max</th>
+                        <th style={S.th}>Sine PP</th>
+                        <th style={S.th}>Cos PP</th>
+                        <th style={S.th}>Offset</th>
+                        <th style={S.th}>Result</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredMotors.filter(m => m.status === 'APPROVED').slice().reverse().map((m, i) => {
+                        const d = computeMotorReportData(m, goldenSamples);
+                        return (
+                          <tr key={m.id} className="table-row-hover" style={{ background: i % 2 === 0 ? activeTheme.surfaceAlt : activeTheme.surface }}>
+                            <td style={S.td}>{m.form.serialNo}</td>
+                            <td style={S.td}>{m.form.testDate}</td>
+                            <td style={S.td}>{m.form.programName}</td>
+                            <td style={S.td}>{m.form.motorModel}</td>
+                            <td style={S.td}>{m.form.motorCode}</td>
+                            <td style={S.td}>{m.form.testedBy}</td>
+                            <td style={{ ...S.td, fontWeight: 700, color: activeTheme.primary }}>{d.peakTorqueDUT.toFixed(2)}</td>
+                            <td style={{ ...S.td, fontWeight: 700, color: activeTheme.primary }}>{d.peakPowerDUT_kW.toFixed(2)}</td>
+                            <td style={S.td}>{d.bemf3000 !== null ? d.bemf3000.toFixed(2) : "—"}</td>
+                            <td style={S.td}>{m.torqueAdj || "0"}</td>
+                            <td style={S.td}>{m.form.hipotU}</td>
+                            <td style={S.td}>{m.form.hipotV}</td>
+                            <td style={S.td}>{m.form.hipotW}</td>
+                            <td style={S.td}>{m.form.irU}</td>
+                            <td style={S.td}>{m.form.irV}</td>
+                            <td style={S.td}>{m.form.irW}</td>
+                            <td style={S.td}>{m.form.resU}</td>
+                            <td style={S.td}>{m.form.resV}</td>
+                            <td style={S.td}>{m.form.resW}</td>
+                            <td style={S.td}>{m.form.sineMin}</td>
+                            <td style={S.td}>{m.form.sineMax}</td>
+                            <td style={S.td}>{m.form.cosMin}</td>
+                            <td style={S.td}>{m.form.cosMax}</td>
+                            <td style={S.td}>{m.form.sinePP}</td>
+                            <td style={S.td}>{m.form.cosPP}</td>
+                            <td style={S.td}>{m.form.offset}</td>
+                            <td style={S.td}>
+                              <Badge pass={d.overallPass} theme={activeTheme} />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
-                {/* ── STEP 1: Report ── */}
-                {view === "new_report" && step === 1 && (
+              {archiveSubTab === 'pdi' && (
+                <div style={S.section}>
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ ...S.sectionTitle, marginBottom: 15, border: 'none' }}>QI / PDI Reports Archive</div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", background: activeTheme.surfaceAlt, padding: "5px 8px", borderRadius: 6 }}>
+                      <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1, color: activeTheme.primary, textTransform: 'uppercase' }}>Filter</span>
+                      <div style={{ width: 1, height: 16, background: activeTheme.border, margin: '0 2px' }} />
+                      <input style={{ ...S.input, width: 110, padding: '4px 8px', fontSize: 10 }} placeholder="Serial" value={filterQiPdiSerial} onChange={e => setFilterQiPdiSerial(e.target.value)} />
+                      <input style={{ ...S.input, width: 100, padding: '4px 8px', fontSize: 10 }} placeholder="Model" value={filterQiPdiModel} onChange={e => setFilterQiPdiModel(e.target.value)} />
+                      <input type="date" style={{ ...S.input, width: 110, padding: '4px 8px', fontSize: 10 }} value={filterQiPdiDateFrom} onChange={e => setFilterQiPdiDateFrom(e.target.value)} />
+                      <span style={{ fontSize: 9, color: activeTheme.textMuted }}>to</span>
+                      <input type="date" style={{ ...S.input, width: 110, padding: '4px 8px', fontSize: 10 }} value={filterQiPdiDateTo} onChange={e => setFilterQiPdiDateTo(e.target.value)} />
+                    </div>
+                  </div>
+                  <table style={S.table}>
+                    <thead>
+                      <tr>
+                        <th style={S.th}>Date</th>
+                        <th style={S.th}>Serial No</th>
+                        <th style={S.th}>Model</th>
+                        <th style={S.th}>Tested By</th>
+                        <th style={S.th}>Result</th>
+                        <th style={S.th}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredQiPdiReports.length === 0 ? (
+                        <tr><td colSpan="5" style={{ ...S.td, textAlign: 'center', color: activeTheme.textMuted }}>No reports found.</td></tr>
+                      ) : (
+                        filteredQiPdiReports.slice().reverse().map((r, i) => (
+                          <tr key={r.id} className="table-row-hover">
+                            <td style={S.td}>{r.timestamp?.slice(0, 10) || "—"}</td>
+                            <td style={S.td}>{r.serialNo}</td>
+                            <td style={S.td}>{r.motorModel}</td>
+                            <td style={S.td}>{r.testedBy}</td>
+                            <td style={S.td}>
+                              <Badge pass={r.data && r.data.filter(i => i.no !== 21).every(item => item.status === "OK" || item.status === "NOT OK, But Motor Performance Not Impacted")} theme={activeTheme} />
+                            </td>
+                            <td style={{ ...S.td, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                              {deleteQiPdiConfirmId === r.id ? (
+                                <>
+                                  <span style={{ fontSize: 9, fontWeight: 700, color: activeTheme.error }}>Are you sure?</span>
+                                  <button className="btn-interact" style={{ ...S.btn("error"), padding: "6px 12px", fontSize: 9, borderRadius: 20 }} onClick={() => handleDeleteQiPdi(r.id)}>Confirm</button>
+                                  <button className="btn-interact" style={{ ...S.btn("default"), padding: "6px 12px", fontSize: 9, borderRadius: 20 }} onClick={() => setDeleteQiPdiConfirmId(null)}>Cancel</button>
+                                </>
+                              ) : (
+                                <>
+                                  <button className="btn-interact" style={{ ...S.btn("primary"), padding: "6px 12px", fontSize: 9, borderRadius: 20 }} onClick={() => openQiPdiPreview(r)}>Preview</button>
+                                  <button className="btn-interact" style={{ ...S.btn("success"), padding: "6px 12px", fontSize: 9, borderRadius: 20 }} onClick={() => openQiPdiDownload(r)}>Download</button>
+                                  <button className="btn-interact" style={{ ...S.btn("error"), padding: "6px 12px", fontSize: 9, borderRadius: 20 }} onClick={() => setDeleteQiPdiConfirmId(r.id)}>Delete</button>
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── STEP 0: Data Entry (Merged Upload & Manual) ── */}
+          {view === "new_report" && step === 0 && (
+            <div>
+              {/* Progress Bar & Actions */}
+              <div style={{ ...S.section, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 24px", marginBottom: 20, borderLeft: `6px solid ${activeTheme.primary}` }} className="entrance-fade">
+                <div style={{ flex: 1 }}>
+                  <div style={{ ...S.label, color: activeTheme.primary, fontSize: 11 }}>Report Completion Progress</div>
+                  <div style={{ height: 6, background: activeTheme.border, borderRadius: 3, marginTop: 8, position: "relative", overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${totalProgress}%`, background: `linear-gradient(90deg, ${activeTheme.primary}, ${activeTheme.accent})`, transition: "width 0.8s cubic-bezier(0.65, 0, 0.35, 1)" }}></div>
+                  </div>
+                </div>
+                <div style={{ marginLeft: 32, display: "flex", alignItems: "center", gap: 16 }}>
+                  <div style={{ fontSize: 24, fontWeight: 900, color: activeTheme.primary, fontVariantNumeric: "tabular-nums" }}>{totalProgress}%</div>
+                  <button onClick={resetForm} style={{ ...S.btn("default"), padding: "6px 12px", fontSize: 11 }}>Reset Form</button>
+                </div>
+              </div>
+
+              {/* Correction Note Display */}
+              {selectedMotor && selectedMotor.comment && (
+                <div style={{ ...S.section, borderLeft: `4px solid ${activeTheme.error}`, background: activeTheme.error + '08', padding: '16px 24px', marginBottom: 20 }} className="entrance-fade">
+                  <div style={{ fontSize: 11, fontWeight: 800, color: activeTheme.error, letterSpacing: 1, marginBottom: 4 }}>CORRECTION REQUIRED:</div>
+                  <div style={{ fontSize: 14, fontWeight: 500, color: activeTheme.text }}>{selectedMotor.comment}</div>
+                  <div style={{ fontSize: 10, color: activeTheme.textMuted, marginTop: 8 }}>Please update the fields below and regenerate the report to resubmit for check.</div>
+                </div>
+              )}
+
+              {/* Manual Entry Section */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 16, marginBottom: 20 }}>
+                {/* Motor Identity */}
+                <div className="entrance-fade" style={{ ...S.section, animationDelay: '0.1s', marginBottom: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                    <div style={{ ...S.sectionTitle, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <SectionIcon type="identity" color={activeTheme.primary} />
+                      Motor Identity
+                    </div>
+                    {sectionProgress.identity === 6 && <span style={{ color: activeTheme.success, fontSize: 10, fontWeight: 800 }}>✓ COMPLETE</span>}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 10px" }}>
+                    <div style={{ gridColumn: "1 / -1", marginBottom: 4 }}>
+                      <label style={S.label}>Program <span style={{ color: activeTheme.error }}>*</span></label>
+                      <select
+                        style={{ ...S.input, padding: "8px 10px", flex: 1, opacity: programs.length === 0 ? 0.6 : 1 }}
+                        value={form.programName}
+                        disabled={programs.length === 0}
+                        onChange={e => handleProgramChange(e.target.value)}
+                      >
+                        <option value="">{programs.length === 0 ? "No programs available" : "Select Program"}</option>
+                        {programs.map(p => (
+                          <option key={p.id} value={p.name}>{p.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <MField label="Serial No" required value={form.serialNo} onChange={F("serialNo")} S={S} theme={activeTheme} disabled={!canEditValidation} />
+                    <MField label="Test Date" required type="date" value={form.testDate} onChange={F("testDate")} S={S} theme={activeTheme} disabled={!canEditValidation} />
+                    <div style={{ marginBottom: 10 }}>
+                      <label style={S.label}>Part No. <span style={{ color: activeTheme.error }}>*</span></label>
+                      <select
+                        style={{ ...S.input, padding: "8px 10px", flex: 1, opacity: !canEditValidation ? 0.6 : 1 }}
+                        value={form.motorCode}
+                        disabled={!canEditValidation}
+                        onChange={e => {
+                          const sample = goldenSamples.find(s => s.motorCode === e.target.value);
+                          if (sample) {
+                            setForm(f => ({ ...f, motorCode: sample.motorCode, motorModel: sample.motorModel }));
+                          } else {
+                            setForm(f => ({ ...f, motorCode: "", motorModel: "" }));
+                          }
+                        }}
+                      >
+                        <option value="">Select Part No.</option>
+                        {goldenSamples.map(s => <option key={s.motorCode} value={s.motorCode}>{s.motorCode}</option>)}
+                      </select>
+                    </div>
+                    <MField label="Motor Model" required value={form.motorModel} onChange={F("motorModel")} S={S} theme={activeTheme} disabled={!canEditValidation} />
+                    <MField label="Tested By" required value={form.testedBy} onChange={F("testedBy")} S={S} theme={activeTheme} disabled={!canEditValidation} />
+                  </div>
+                </div>
+
+                {/* PDI */}
+                <div className="entrance-fade" style={{ ...S.section, animationDelay: '0.2s', marginBottom: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                    <div style={{ ...S.sectionTitle, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <SectionIcon type="pdi" color={activeTheme.primary} />
+                      PDI // Electrical
+                    </div>
+                    {sectionProgress.pdi === 9 && <span style={{ color: activeTheme.success, fontSize: 10, fontWeight: 800 }}>✓ COMPLETE</span>}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 10px" }}>
+                    <MField label="Hipot U" required unit="mA" value={form.hipotU} onChange={F("hipotU")} passCheck={activeGolden ? v => v > 0 && v < (activeGolden.hipotLimit) : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
+                    <MField label="Hipot V" required unit="mA" value={form.hipotV} onChange={F("hipotV")} passCheck={activeGolden ? v => v > 0 && v < (activeGolden.hipotLimit) : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
+                    <MField label="Hipot W" required unit="mA" value={form.hipotW} onChange={F("hipotW")} passCheck={activeGolden ? v => v > 0 && v < (activeGolden.hipotLimit) : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
+                    <MField label="IR U" required unit="MΩ" value={form.irU} onChange={F("irU")} passCheck={activeGolden ? v => v >= (activeGolden.irLimit) : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
+                    <MField label="IR V" required unit="MΩ" value={form.irV} onChange={F("irV")} passCheck={activeGolden ? v => v >= (activeGolden.irLimit) : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
+                    <MField label="IR W" required unit="MΩ" value={form.irW} onChange={F("irW")} passCheck={activeGolden ? v => v >= (activeGolden.irLimit) : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
+                    <MField label="Res U" required unit="mΩ" value={form.resU} onChange={F("resU")} passCheck={activeGolden ? v => Math.abs(v - (activeGolden.resistance)) <= 3 : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
+                    <MField label="Res V" required unit="mΩ" value={form.resV} onChange={F("resV")} passCheck={activeGolden ? v => Math.abs(v - (activeGolden.resistance)) <= 3 : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
+                    <MField label="Res W" required unit="mΩ" value={form.resW} onChange={F("resW")} passCheck={activeGolden ? v => Math.abs(v - (activeGolden.resistance)) <= 3 : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
+                  </div>
+                </div>
+                {/* Encoder */}
+                <div className="entrance-fade" style={{ ...S.section, animationDelay: '0.3s', marginBottom: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                    <div style={{ ...S.sectionTitle, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <SectionIcon type="encoder" color={activeTheme.primary} />
+                      Encoder
+                    </div>
+                    {sectionProgress.encoder === 7 && <span style={{ color: activeTheme.success, fontSize: 10, fontWeight: 800 }}>✓ COMPLETE</span>}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 10px" }}>
+                    <MField label="Sine Min" required unit="cts" value={form.sineMin} onChange={F("sineMin")} passCheck={activeGolden ? v => Math.abs(v - (activeGolden.encoder?.sineMin || 0)) <= 75 : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
+                    <MField label="Sine Max" required unit="cts" value={form.sineMax} onChange={F("sineMax")} passCheck={activeGolden ? v => Math.abs(v - (activeGolden.encoder?.sineMax || 0)) <= 75 : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
+                    <MField label="Cos Min" required unit="cts" value={form.cosMin} onChange={F("cosMin")} passCheck={activeGolden ? v => Math.abs(v - (activeGolden.encoder?.cosMin || 0)) <= 75 : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
+                    <MField label="Cos Max" required unit="cts" value={form.cosMax} onChange={F("cosMax")} passCheck={activeGolden ? v => Math.abs(v - (activeGolden.encoder?.cosMax || 0)) <= 75 : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
+                    <MField label="Sine P-P" required unit="cts" value={form.sinePP} onChange={F("sinePP")} passCheck={activeGolden ? v => Math.abs(v - (activeGolden.encoder?.sinePP || 0)) <= 150 : null} S={S} theme={activeTheme} disabled />
+                    <MField label="Cos P-P" required unit="cts" value={form.cosPP} onChange={F("cosPP")} passCheck={activeGolden ? v => Math.abs(v - (activeGolden.encoder?.cosPP || 0)) <= 150 : null} S={S} theme={activeTheme} disabled />
+                    <MField label="Offset" required unit="cts" value={form.offset} onChange={F("offset")} passCheck={activeGolden ? v => Math.abs(v - (activeGolden.encoder?.offset || 0)) <= 3 : null} S={S} theme={activeTheme} disabled={!canEditValidation} />
+                  </div>
+                </div>
+
+                {/* Zone A Upload */}
+                <div className="entrance-fade" style={{ ...S.section, animationDelay: '0.4s', marginBottom: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                    <div style={{ ...S.sectionTitle, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <SectionIcon type="upload" color={activeTheme.primary} />
+                      Peak Power Data
+                    </div>
+                    {ppData.length > 0 && <span style={{ color: activeTheme.success, fontSize: 10, fontWeight: 800 }}>✓ UPLOADED</span>}
+                  </div>
+                  <UploadZone
+                    label=""
+                    accept=".xlsx,.csv"
+                    onFile={parsePP}
+                    parsed={adjustedPpData}
+                    fileName={ppName}
+                    S={S}
+                    theme={activeTheme}
+                    disabled={!canEditValidation}
+                  />
+                  <div style={{ marginTop: 16 }}>
+                    <MField label="Torque Adjustment" required unit="Nm" value={torqueAdj} onChange={setTorqueAdj} S={S} theme={activeTheme} disabled={!canEditValidation} />
+                  </div>
+                </div>
+
+                {/* Zone B Upload */}
+                <div className="entrance-fade" style={{ ...S.section, animationDelay: '0.5s', marginBottom: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                    <div style={{ ...S.sectionTitle, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <SectionIcon type="upload" color={activeTheme.primary} />
+                      BEMF Test Data
+                    </div>
+                    {bemfData.length > 0 && <span style={{ color: activeTheme.success, fontSize: 10, fontWeight: 800 }}>✓ UPLOADED</span>}
+                  </div>
+                  <UploadZone
+                    label=""
+                    accept=".xlsx,.csv"
+                    onFile={parseBEMF}
+                    parsed={bemfData}
+                    fileName={bemfName}
+                    S={S}
+                    theme={activeTheme}
+                    disabled={!canEditValidation}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 24 }}>
+                <button
+                  className="btn-interact"
+                  style={S.btn(canGenerate && canEditValidation ? "primary" : "default")}
+                  onClick={handleGenerate}
+                  disabled={!canGenerate || isSaving || !canEditValidation}
+                  title={tooltipText}
+                >
+                  {isSaving ? "Saving..." : "Save & Generate →"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── STEP 1: Report ── */}
+          {view === "new_report" && step === 1 && (
+            <div>
+              <div style={{ display: "flex", gap: 12, marginBottom: 20, alignItems: "center" }}>
+                <button style={S.btn("default")} onClick={() => setStep(0)}>← Edit Data</button>
+                <button style={S.btn(selectedMotor ? "default" : "default")} disabled={!selectedMotor} onClick={handlePrint}>⎙ Print Report</button>
+                <button style={S.btn(selectedMotor ? "success" : "default")} disabled={!selectedMotor} onClick={handleDownloadPDF}>⬇ Download PDF Report</button>
+                <div style={{ flex: 1 }} />
+                <button style={S.btn("primary")} onClick={() => setStep(2)}>
+                  {uploadStatus === 'success' ? '✓ Report Uploaded →' : 'Upload Report →'}
+                </button>
+              </div>
+              <ReportContent motor={{ form, ppData, bemfData, torqueAdj, status: selectedMotor?.status }} reportRef={reportRef} S={S} goldenSamples={goldenSamples} />
+            </div>
+          )}
+
+          {/* ── STEP 2: Upload Report ── */}
+          {view === "new_report" && step === 2 && (
+            <div className="entrance-fade">
+              <div style={{ display: "flex", gap: 12, marginBottom: 20, alignItems: "center" }}>
+                <button style={S.btn("default")} onClick={() => setStep(1)}>← Back to Report</button>
+                <div style={{ flex: 1 }} />
+                {uploadStatus === 'success' && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: activeTheme.success, fontSize: 13, fontWeight: 800 }}>
+                    <span style={{ fontSize: 20 }}>✓</span> Report Uploaded Successfully
+                  </span>
+                )}
+                {uploadStatus === 'error' && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: activeTheme.error, fontSize: 13, fontWeight: 800 }}>
+                    <span style={{ fontSize: 20 }}>✗</span> Upload Failed
+                  </span>
+                )}
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                <div style={{ ...S.section }}>
+                  <div style={{ ...S.sectionTitle, marginBottom: 16 }}>Report Summary</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px", fontSize: 13 }}>
+                    <span style={{ color: activeTheme.textMuted }}>Serial No:</span>
+                    <span style={{ fontWeight: 600, color: activeTheme.text }}>{form.serialNo || "—"}</span>
+                    <span style={{ color: activeTheme.textMuted }}>Motor Model:</span>
+                    <span style={{ fontWeight: 600, color: activeTheme.text }}>{form.motorModel || "—"}</span>
+                    <span style={{ color: activeTheme.textMuted }}>Part No.:</span>
+                    <span style={{ fontWeight: 600, color: activeTheme.text }}>{form.motorCode || "—"}</span>
+                    <span style={{ color: activeTheme.textMuted }}>Test Date:</span>
+                    <span style={{ fontWeight: 600, color: activeTheme.text }}>{form.testDate || "—"}</span>
+                    <span style={{ color: activeTheme.textMuted }}>Tested By:</span>
+                    <span style={{ fontWeight: 600, color: activeTheme.text }}>{form.testedBy || "—"}</span>
+                  </div>
+                </div>
+
+                <div style={{ ...S.section, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, textAlign: "center" }}>
+                  <input type="file" ref={eolFileRef} accept=".pdf" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleManualEolUpload(f); e.target.value = ''; }} />
+                  {uploadStatus === null && (
+                    <>
+                      <div style={{ fontSize: 40 }}>📄</div>
+                      <div style={{ fontWeight: 700, color: activeTheme.text }}>Ready to Upload</div>
+                      <div style={{ fontSize: 12, color: activeTheme.textMuted, maxWidth: 280 }}>
+                        Upload the generated report to the traceability system for approval.
+                      </div>
+                      <div style={{ display: 'flex', gap: 12 }}>
+                        <button className="btn-interact" style={S.btn("primary")} onClick={handleUploadEolReport}>
+                          Upload Generated Report
+                        </button>
+                        <button className="btn-interact" style={S.btn("default")} onClick={() => eolFileRef.current?.click()}>
+                          Browse & Upload Manual
+                        </button>
+                      </div>
+                    </>
+                  )}
+                  {uploadStatus === 'uploading' && (
+                    <>
+                      <div style={{ width: 48, height: 48, borderRadius: '50%', border: `4px solid ${activeTheme.border}`, borderTopColor: activeTheme.primary, animation: 'spin 0.8s linear infinite' }} />
+                      <div style={{ fontWeight: 700, color: activeTheme.primary }}>Uploading Report...</div>
+                      <div style={{ fontSize: 12, color: activeTheme.textMuted }}>Please wait while the report is being uploaded.</div>
+                    </>
+                  )}
+                  {uploadStatus === 'success' && (
+                    <>
+                      <div style={{ width: 64, height: 64, borderRadius: '50%', background: activeTheme.success + '20', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ fontSize: 32, color: activeTheme.success }}>✓</span>
+                      </div>
+                      <div style={{ fontWeight: 700, fontSize: 16, color: activeTheme.success }}>Report Uploaded!</div>
+                      <div style={{ fontSize: 12, color: activeTheme.textMuted, maxWidth: 300 }}>
+                        The EOL report has been successfully uploaded and linked to the traceability record for <strong>{form.serialNo}</strong>.
+                      </div>
+                      <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                        <button className="btn-interact" style={S.btn("default")} onClick={() => setStep(1)}>← Back to Report</button>
+                        <button className="btn-interact" style={S.btn("default")} onClick={handleUploadEolReport}>Upload Again</button>
+                      </div>
+                    </>
+                  )}
+                  {uploadStatus === 'error' && (
+                    <>
+                      <div style={{ width: 64, height: 64, borderRadius: '50%', background: activeTheme.error + '20', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ fontSize: 32, color: activeTheme.error }}>✗</span>
+                      </div>
+                      <div style={{ fontWeight: 700, fontSize: 16, color: activeTheme.error }}>Upload Failed</div>
+                      <div style={{ fontSize: 12, color: activeTheme.textMuted, maxWidth: 300 }}>
+                        The report could not be uploaded. Please check your connection and try again.
+                      </div>
+                      <button className="btn-interact" style={S.btn("error")} onClick={handleUploadEolReport}>Retry Upload</button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Manual Report Upload Section ── */}
+              <div style={{ ...S.section, marginTop: 20 }}>
+                <div style={{ ...S.sectionTitle, marginBottom: 16 }}>Manual Report Upload</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 10px" }}>
+                  <div style={{ gridColumn: "1 / -1", marginBottom: 4 }}>
+                    <label style={S.label}>Program <span style={{ color: activeTheme.error }}>*</span></label>
+                    <select
+                      style={{ ...S.input, padding: "8px 10px", flex: 1, opacity: programs.length === 0 ? 0.6 : 1 }}
+                      value={form.programName}
+                      disabled={programs.length === 0}
+                      onChange={e => handleProgramChange(e.target.value)}
+                    >
+                      <option value="">{programs.length === 0 ? "No programs available" : "Select Program"}</option>
+                      {programs.map(p => (
+                        <option key={p.id} value={p.name}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <MField label="Serial No" value={form.serialNo} onChange={F("serialNo")} S={S} theme={activeTheme} disabled={!canEditValidation} />
+                  <MField label="Motor Model" value={form.motorModel} onChange={F("motorModel")} S={S} theme={activeTheme} disabled={!canEditValidation} />
+                  <div style={{ marginBottom: 10 }}>
+                    <label style={S.label}>Part No. <span style={{ color: activeTheme.error }}>*</span></label>
+                    <select
+                      style={{ ...S.input, padding: "8px 10px", flex: 1, opacity: !canEditValidation ? 0.6 : 1 }}
+                      value={form.motorCode}
+                      disabled={!canEditValidation}
+                      onChange={e => {
+                        const sample = goldenSamples.find(s => s.motorCode === e.target.value);
+                        if (sample) {
+                          setForm(f => ({ ...f, motorCode: sample.motorCode, motorModel: sample.motorModel }));
+                        } else {
+                          setForm(f => ({ ...f, motorCode: "", motorModel: "" }));
+                        }
+                      }}
+                    >
+                      <option value="">Select Part No.</option>
+                      {goldenSamples.map(s => <option key={s.motorCode} value={s.motorCode}>{s.motorCode}</option>)}
+                    </select>
+                  </div>
+                  <MField label="Test Date" type="date" value={form.testDate} onChange={F("testDate")} S={S} theme={activeTheme} disabled={!canEditValidation} />
+                  <MField label="Tested By" value={form.testedBy} onChange={F("testedBy")} S={S} theme={activeTheme} disabled={!canEditValidation} />
+                </div>
+                <div style={{ display: 'flex', gap: 12, marginTop: 16, alignItems: 'center' }}>
+                  <button className="btn-interact" style={S.btn("primary")} onClick={() => eolFileRef.current?.click()}>
+                    Browse & Upload PDF
+                  </button>
+                  <span style={{ fontSize: 11, color: activeTheme.textMuted }}>Select a PDF file to upload manually</span>
+                  {uploadStatus === 'uploading' && <span style={{ color: activeTheme.primary, fontSize: 12, fontWeight: 700 }}>Uploading...</span>}
+                  {uploadStatus === 'success' && <span style={{ color: activeTheme.success, fontSize: 12, fontWeight: 700 }}>✓ Uploaded</span>}
+                  {uploadStatus === 'error' && <span style={{ color: activeTheme.error, fontSize: 12, fontWeight: 700 }}>✗ Failed</span>}
+                </div>
+              </div>
+
+              {/* Hidden report for upload purposes */}
+              <div style={{ position: 'absolute', left: '-9999px', top: 0, width: '1360px' }}>
+                <ReportContent motor={{ form, ppData, bemfData, torqueAdj, status: selectedMotor?.status }} reportRef={hiddenEolRef} S={S} goldenSamples={goldenSamples} />
+              </div>
+            </div>
+          )}
+
+          {/* ── QI/PDI New Report View ── */}
+          {view === "qi_pdi_report" && (
+            <>
+              <div style={{ ...S.stepBar, background: 'transparent', borderBottom: 'none', padding: "8px 24px", gap: 12 }}>
+                {["01 // Data Entry", "02 // Report", "03 // Upload Report"].map((label, i) => (
+                  <button key={i}
+                    style={{
+                      padding: "8px 20px", fontSize: 10, fontWeight: 800, letterSpacing: 1, cursor: "pointer", border: "none",
+                      borderRadius: 30,
+                      background: pdiStep === i ? activeTheme.primary : activeTheme.surfaceAlt,
+                      color: pdiStep === i ? "#fff" : activeTheme.textMuted,
+                      boxShadow: pdiStep === i ? `0 4px 12px ${activeTheme.primary}44` : 'none',
+                      transition: "all 0.3s ease",
+                      textTransform: "uppercase"
+                    }}
+                    onClick={() => setPdiStep(i)}
+                  >
+                    {pdiStep > i && "✓ "}{label}
+                  </button>
+                ))}
+              </div>
+
+              {/* ── PDI STEP 0: Data Entry ── */}
+              {pdiStep === 0 && (
+                <div className="entrance-fade">
+                  <div style={S.section}>
+                    <div style={S.sectionTitle}>Motor Identity</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10 }}>
+                      <div style={{ gridColumn: "1 / -1", marginBottom: 4 }}>
+                        <label style={S.label}>Program <span style={{ color: activeTheme.error }}>*</span></label>
+                        <select
+                          style={{ ...S.input, padding: "8px 10px", flex: 1, opacity: programs.length === 0 ? 0.6 : 1 }}
+                          value={form.programName}
+                          disabled={programs.length === 0}
+                          onChange={e => handleProgramChange(e.target.value)}
+                        >
+                          <option value="">{programs.length === 0 ? "No programs available" : "Select Program"}</option>
+                          {programs.map(p => (
+                            <option key={p.id} value={p.name}>{p.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <MField label="Serial No" value={form.serialNo} onChange={F("serialNo")} S={S} theme={activeTheme} disabled={!canEditQiPdi} />
+                      <MField label="Test Date" type="date" value={form.testDate} onChange={F("testDate")} S={S} theme={activeTheme} disabled={!canEditQiPdi} />
+                      <div style={{ marginBottom: 10 }}>
+                        <label style={S.label}>Part No.</label>
+                        <select
+                          style={{ ...S.input, padding: "8px 10px", flex: 1, opacity: !canEditQiPdi ? 0.6 : 1 }}
+                          value={form.motorCode}
+                          disabled={!canEditQiPdi}
+                          onChange={e => handleQiPdiRefSelection(e.target.value)}
+                        >
+                          <option value="">Select Part No.</option>
+                          {qiPdiRefSamples.map(s => <option key={s.motorCode} value={s.motorCode}>{s.motorCode}</option>)}
+                        </select>
+                      </div>
+                      <MField label="Motor Model" value={form.motorModel} onChange={F("motorModel")} S={S} theme={activeTheme} disabled={!canEditQiPdi} />
+                      <MField label="Tested By" value={form.testedBy} onChange={F("testedBy")} S={S} theme={activeTheme} disabled={!canEditQiPdi} />
+                    </div>
+                  </div>
+
+                  <div style={S.section}>
+                    <div style={S.sectionTitle}>Inspection Checklist</div>
+                    <table style={{ ...S.table, tableLayout: 'fixed' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ ...S.th, width: 60 }}>S.No</th>
+                          <th style={{ ...S.th, width: 240 }}>Description</th>
+                          <th style={{ ...S.th, width: 240 }}>Specification</th>
+                          <th style={{ ...S.th, width: 240 }}>Method of Check</th>
+                          <th style={S.th}>Observed</th>
+                          <th style={{ ...S.th, width: 120 }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {qiPdiData.map((item, idx) => {
+                          const isLastRow = idx === qiPdiData.length - 1;
+                          return (
+                            <tr key={item.no} style={{ background: idx % 2 === 0 ? activeTheme.surfaceAlt : activeTheme.surface }}>
+                              <td style={S.td}>{item.no}</td>
+                              <td style={S.td}>{item.desc}</td>
+                              {isLastRow ? (
+                                <td colSpan={4} style={S.td}>
+                                  <textarea
+                                    style={{ ...S.input, padding: "4px 8px", fontSize: 12, minHeight: "40px", resize: "vertical", fontFamily: "inherit" }}
+                                    value={item.observed}
+                                    onChange={e => {
+                                      const newData = [...qiPdiData];
+                                      newData[idx].observed = e.target.value;
+                                      setQiPdiData(newData);
+                                    }}
+                                    placeholder="Enter deviations or general comments..."
+                                  />
+                                </td>
+                              ) : (
+                                <>
+                                  <td style={S.td}>{item.spec}</td>
+                                  <td style={S.td}>{item.method}</td>
+                                  <td style={S.td}>
+                                    <textarea
+                                      style={{ ...S.input, padding: "4px 8px", fontSize: 12, minHeight: "40px", resize: "vertical", fontFamily: "inherit" }}
+                                      value={item.observed}
+                                      onChange={e => {
+                                        const newData = [...qiPdiData];
+                                        newData[idx].observed = e.target.value;
+                                        setQiPdiData(newData);
+                                      }}
+                                    />
+                                  </td>
+                                  <td style={S.td}>
+                                    <select
+                                      style={{
+                                        ...S.input,
+                                        padding: "4px 8px",
+                                        fontSize: 12,
+                                        background: item.status === "OK" ? "#dcfce7" : (item.status === "NOT OK" ? "#fee2e2" : (item.status === "NOT OK, But Motor Performance Not Impacted" ? "#fef9c3" : activeTheme.surfaceAlt)),
+                                        color: item.status === "OK" ? "#15803d" : (item.status === "NOT OK" ? "#b91c1c" : (item.status === "NOT OK, But Motor Performance Not Impacted" ? "#854d0e" : activeTheme.text))
+                                      }}
+                                      value={item.status}
+                                      onChange={e => {
+                                        const newData = [...qiPdiData];
+                                        newData[idx].status = e.target.value;
+                                        setQiPdiData(newData);
+                                      }}
+                                    >
+                                      <option value="">Select</option>
+                                      <option value="OK">OK</option>
+                                      <option value="NOT OK">NOT OK</option>
+                                      <option value="NOT OK, But Motor Performance Not Impacted">NOT OK, But Motor Performance Not Impacted</option>
+                                    </select>
+                                  </td>
+                                </>
+                              )}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20, gap: 10, alignItems: "center" }}>
+                      <div style={{ marginRight: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: activeTheme.textMuted, letterSpacing: 1 }}>INSPECTION RESULT:</span>
+                        <Badge pass={qiPdiData.filter(i => i.no !== 21).every(i => i.status === "OK" || i.status === "NOT OK, But Motor Performance Not Impacted")} theme={activeTheme} />
+                      </div>
+                      <button style={S.btn("default")} onClick={() => {
+                        setQiPdiData(QI_PDI_DEFAULTS.map(i => ({
+                          ...i,
+                          observed: i.no === 21 ? "Connector push mount not provided, push mount cable tie provided as alternative" : "",
+                          status: ""
+                        })));
+                        setPdiUploadStatus(null);
+                      }}>
+                        Clear Table
+                      </button>
+                      <button style={S.btn("success")} onClick={handleSaveQiPdi} disabled={isSaving}>{isSaving ? "Saving..." : "💾 Save & Generate"}</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── PDI STEP 1: Report Preview ── */}
+              {pdiStep === 1 && (
+                previewQiPdi ? (
                   <div>
                     <div style={{ display: "flex", gap: 12, marginBottom: 20, alignItems: "center" }}>
-                      <button style={S.btn("default")} onClick={() => setStep(0)}>← Edit Data</button>
-                      <button style={S.btn(selectedMotor ? "default" : "default")} disabled={!selectedMotor} onClick={handlePrint}>⎙ Print Report</button>
-                      <button style={S.btn(selectedMotor ? "success" : "default")} disabled={!selectedMotor} onClick={handleDownloadPDF}>⬇ Download PDF Report</button>
+                      <button style={S.btn("default")} onClick={() => { setPdiStep(0); setPdiUploadStatus(null); }}>← Edit Data</button>
+                      <button
+                        style={S.btn("success")}
+                        onClick={() => openQiPdiDownload({ serialNo: form.serialNo, motorModel: form.motorModel, testedBy: form.testedBy, data: qiPdiData, testDate: form.testDate })}
+                      >
+                        ⬇ Download PDF
+                      </button>
+                      <button style={S.btn("primary")} onClick={() => window.print()}>⎙ Print Report</button>
                       <div style={{ flex: 1 }} />
-                      <button style={S.btn("primary")} onClick={() => setStep(2)}>
-                        {uploadStatus === 'success' ? '✓ Report Uploaded →' : 'Upload Report →'}
+                      {pdiUploadStatus === 'success' && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: activeTheme.success, fontSize: 11, fontWeight: 700 }}>
+                          <span style={{ fontSize: 16 }}>✓</span> Uploaded
+                        </span>
+                      )}
+                      <button style={S.btn("primary")} onClick={() => setPdiStep(2)}>
+                        {pdiUploadStatus === 'success' ? '✓ Report Uploaded →' : 'Upload Report →'}
                       </button>
                     </div>
-                    <ReportContent motor={{ form, ppData, bemfData, torqueAdj, status: selectedMotor?.status }} reportRef={reportRef} S={S} goldenSamples={goldenSamples} />
+                    <div style={{ overflowX: 'auto' }}>
+                      <QiPdiReportContent report={previewQiPdi} reportRef={hiddenPdiRef} S={S} />
+                    </div>
                   </div>
-                )}
+                ) : (
+                  <div style={{ ...S.section, textAlign: 'center', padding: 40 }}>
+                    <div style={{ fontSize: 24, marginBottom: 12 }}>📋</div>
+                    <div style={{ fontWeight: 700, fontSize: 16, color: activeTheme.text, marginBottom: 8 }}>No Report Yet</div>
+                    <div style={{ fontSize: 13, color: activeTheme.textMuted, marginBottom: 20 }}>
+                      Please fill in the data and click <strong>"Save & Generate"</strong> first.
+                    </div>
+                    <button style={S.btn("primary")} onClick={() => setPdiStep(0)}>← Go to Data Entry</button>
+                  </div>
+                )
+              )}
 
-                {/* ── STEP 2: Upload Report ── */}
-                {view === "new_report" && step === 2 && (
+              {/* ── PDI STEP 2: Upload Report ── */}
+              {pdiStep === 2 && (
+                previewQiPdi ? (
                   <div className="entrance-fade">
                     <div style={{ display: "flex", gap: 12, marginBottom: 20, alignItems: "center" }}>
-                      <button style={S.btn("default")} onClick={() => setStep(1)}>← Back to Report</button>
+                      <button style={S.btn("default")} onClick={() => setPdiStep(1)}>← Back to Report</button>
                       <div style={{ flex: 1 }} />
-                      {uploadStatus === 'success' && (
+                      {pdiUploadStatus === 'success' && (
                         <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: activeTheme.success, fontSize: 13, fontWeight: 800 }}>
                           <span style={{ fontSize: 20 }}>✓</span> Report Uploaded Successfully
                         </span>
                       )}
-                      {uploadStatus === 'error' && (
+                      {pdiUploadStatus === 'error' && (
                         <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: activeTheme.error, fontSize: 13, fontWeight: 800 }}>
                           <span style={{ fontSize: 20 }}>✗</span> Upload Failed
                         </span>
@@ -3239,404 +3833,150 @@ export default function EolPdiApp({ user, workOrders = [], programs = [], tracea
                       </div>
 
                       <div style={{ ...S.section, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, textAlign: "center" }}>
-                        {uploadStatus === null && (
+                        <input type="file" ref={pdiFileRef} accept=".pdf" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleManualPdiUpload(f); e.target.value = ''; }} />
+                        {pdiUploadStatus === null && (
                           <>
                             <div style={{ fontSize: 40 }}>📄</div>
                             <div style={{ fontWeight: 700, color: activeTheme.text }}>Ready to Upload</div>
                             <div style={{ fontSize: 12, color: activeTheme.textMuted, maxWidth: 280 }}>
-                              Upload the generated report to the traceability system for approval.
+                              Upload the PDI report to the traceability system for approval.
                             </div>
-                            <button className="btn-interact" style={S.btn("primary")} onClick={handleUploadEolReport}>
-                              Upload Report
-                            </button>
+                            <div style={{ display: 'flex', gap: 12 }}>
+                              <button className="btn-interact" style={S.btn("primary")} onClick={handleUploadPdiReport}>
+                                Upload Generated Report
+                              </button>
+                              <button className="btn-interact" style={S.btn("default")} onClick={() => pdiFileRef.current?.click()}>
+                                Browse & Upload Manual
+                              </button>
+                            </div>
                           </>
                         )}
-                        {uploadStatus === 'uploading' && (
+                        {pdiUploadStatus === 'uploading' && (
                           <>
                             <div style={{ width: 48, height: 48, borderRadius: '50%', border: `4px solid ${activeTheme.border}`, borderTopColor: activeTheme.primary, animation: 'spin 0.8s linear infinite' }} />
-                            <div style={{ fontWeight: 700, color: activeTheme.primary }}>Uploading Report...</div>
+                            <div style={{ fontWeight: 700, color: activeTheme.primary }}>Uploading PDI Report...</div>
                             <div style={{ fontSize: 12, color: activeTheme.textMuted }}>Please wait while the report is being uploaded.</div>
                           </>
                         )}
-                        {uploadStatus === 'success' && (
+                        {pdiUploadStatus === 'success' && (
                           <>
                             <div style={{ width: 64, height: 64, borderRadius: '50%', background: activeTheme.success + '20', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                               <span style={{ fontSize: 32, color: activeTheme.success }}>✓</span>
                             </div>
-                            <div style={{ fontWeight: 700, fontSize: 16, color: activeTheme.success }}>Report Uploaded!</div>
+                            <div style={{ fontWeight: 700, fontSize: 16, color: activeTheme.success }}>PDI Report Uploaded!</div>
                             <div style={{ fontSize: 12, color: activeTheme.textMuted, maxWidth: 300 }}>
-                              The EOL report has been successfully uploaded and linked to the traceability record for <strong>{form.serialNo}</strong>.
+                              The PDI report has been successfully uploaded and linked to the traceability record for <strong>{form.serialNo}</strong>.
                             </div>
                             <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-                              <button className="btn-interact" style={S.btn("default")} onClick={() => setStep(1)}>← Back to Report</button>
-                              <button className="btn-interact" style={S.btn("default")} onClick={handleUploadEolReport}>Upload Again</button>
+                              <button className="btn-interact" style={S.btn("default")} onClick={() => setPdiStep(1)}>← Back to Report</button>
+                              <button className="btn-interact" style={S.btn("default")} onClick={handleUploadPdiReport}>Upload Again</button>
                             </div>
                           </>
                         )}
-                        {uploadStatus === 'error' && (
+                        {pdiUploadStatus === 'error' && (
                           <>
                             <div style={{ width: 64, height: 64, borderRadius: '50%', background: activeTheme.error + '20', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                               <span style={{ fontSize: 32, color: activeTheme.error }}>✗</span>
                             </div>
                             <div style={{ fontWeight: 700, fontSize: 16, color: activeTheme.error }}>Upload Failed</div>
                             <div style={{ fontSize: 12, color: activeTheme.textMuted, maxWidth: 300 }}>
-                              The report could not be uploaded. Please check your connection and try again.
+                              The PDI report could not be uploaded. Please check your connection and try again.
                             </div>
-                            <button className="btn-interact" style={S.btn("error")} onClick={handleUploadEolReport}>Retry Upload</button>
+                            <button className="btn-interact" style={S.btn("error")} onClick={handleUploadPdiReport}>Retry Upload</button>
                           </>
                         )}
                       </div>
                     </div>
 
-                    {/* Hidden report for upload purposes */}
+                    {/* ── Manual PDI Report Upload Section ── */}
+                    <div style={{ ...S.section, marginTop: 20 }}>
+                      <div style={{ ...S.sectionTitle, marginBottom: 16 }}>Manual PDI Report Upload</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 10px" }}>
+                        <div style={{ gridColumn: "1 / -1", marginBottom: 4 }}>
+                          <label style={S.label}>Program <span style={{ color: activeTheme.error }}>*</span></label>
+                          <select
+                            style={{ ...S.input, padding: "8px 10px", flex: 1, opacity: programs.length === 0 ? 0.6 : 1 }}
+                            value={form.programName}
+                            disabled={programs.length === 0}
+                            onChange={e => handleProgramChange(e.target.value)}
+                          >
+                            <option value="">{programs.length === 0 ? "No programs available" : "Select Program"}</option>
+                            {programs.map(p => (
+                              <option key={p.id} value={p.name}>{p.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <MField label="Serial No" value={form.serialNo} onChange={F("serialNo")} S={S} theme={activeTheme} disabled={!canEditQiPdi} />
+                        <MField label="Motor Model" value={form.motorModel} onChange={F("motorModel")} S={S} theme={activeTheme} disabled={!canEditQiPdi} />
+                        <div style={{ marginBottom: 10 }}>
+                          <label style={S.label}>Part No.</label>
+                          <select
+                            style={{ ...S.input, padding: "8px 10px", flex: 1, opacity: !canEditQiPdi ? 0.6 : 1 }}
+                            value={form.motorCode}
+                            disabled={!canEditQiPdi}
+                            onChange={e => handleQiPdiRefSelection(e.target.value)}
+                          >
+                            <option value="">Select Part No.</option>
+                            {qiPdiRefSamples.map(s => <option key={s.motorCode} value={s.motorCode}>{s.motorCode}</option>)}
+                          </select>
+                        </div>
+                        <MField label="Test Date" type="date" value={form.testDate} onChange={F("testDate")} S={S} theme={activeTheme} disabled={!canEditQiPdi} />
+                        <MField label="Tested By" value={form.testedBy} onChange={F("testedBy")} S={S} theme={activeTheme} disabled={!canEditQiPdi} />
+                      </div>
+                      <div style={{ display: 'flex', gap: 12, marginTop: 16, alignItems: 'center' }}>
+                        <button className="btn-interact" style={S.btn("primary")} onClick={() => pdiFileRef.current?.click()}>
+                          Browse & Upload PDF
+                        </button>
+                        <span style={{ fontSize: 11, color: activeTheme.textMuted }}>Select a PDF file to upload manually</span>
+                        {pdiUploadStatus === 'uploading' && <span style={{ color: activeTheme.primary, fontSize: 12, fontWeight: 700 }}>Uploading...</span>}
+                        {pdiUploadStatus === 'success' && <span style={{ color: activeTheme.success, fontSize: 12, fontWeight: 700 }}>✓ Uploaded</span>}
+                        {pdiUploadStatus === 'error' && <span style={{ color: activeTheme.error, fontSize: 12, fontWeight: 700 }}>✗ Failed</span>}
+                      </div>
+                    </div>
+
+                    {/* Hidden PDI report for upload purposes */}
                     <div style={{ position: 'absolute', left: '-9999px', top: 0, width: '1360px' }}>
-                      <ReportContent motor={{ form, ppData, bemfData, torqueAdj, status: selectedMotor?.status }} reportRef={hiddenEolRef} S={S} goldenSamples={goldenSamples} />
+                      <QiPdiReportContent report={previewQiPdi} reportRef={hiddenPdiRef} S={S} />
                     </div>
                   </div>
-                )}
-
-                {/* ── QI/PDI New Report View ── */}
-                {view === "qi_pdi_report" && (
-                  <>
-                    <div style={{ ...S.stepBar, background: 'transparent', borderBottom: 'none', padding: "8px 24px", gap: 12 }}>
-                      {["01 // Data Entry", "02 // Report", "03 // Upload Report"].map((label, i) => (
-                        <button key={i}
-                          style={{
-                            padding: "8px 20px", fontSize: 10, fontWeight: 800, letterSpacing: 1, cursor: "pointer", border: "none",
-                            borderRadius: 30,
-                            background: pdiStep === i ? activeTheme.primary : activeTheme.surfaceAlt,
-                            color: pdiStep === i ? "#fff" : activeTheme.textMuted,
-                            boxShadow: pdiStep === i ? `0 4px 12px ${activeTheme.primary}44` : 'none',
-                            transition: "all 0.3s ease",
-                            textTransform: "uppercase"
-                          }}
-                          onClick={() => setPdiStep(i)}
-                        >
-                          {pdiStep > i && "✓ "}{label}
-                        </button>
-                      ))}
+                ) : (
+                  <div style={{ ...S.section, textAlign: 'center', padding: 40 }}>
+                    <div style={{ fontSize: 24, marginBottom: 12 }}>📋</div>
+                    <div style={{ fontWeight: 700, fontSize: 16, color: activeTheme.text, marginBottom: 8 }}>No Report to Upload</div>
+                    <div style={{ fontSize: 13, color: activeTheme.textMuted, marginBottom: 20 }}>
+                      Please fill in the data and click <strong>"Save & Generate"</strong> first.
                     </div>
+                    <button style={S.btn("primary")} onClick={() => setPdiStep(0)}>← Go to Data Entry</button>
+                  </div>
+                )
+              )}
+            </>
+          )}
+        </div>
+      </main>
+      <ReportPreviewModal
+        motor={previewMotor}
+        show={showPreviewModal}
+        onClose={() => setShowPreviewModal(false)}
+        onDownload={openReportDownload}
+        reportRef={reportRef}
+        S={S}
+        theme={activeTheme}
+        currentUser={currentUser}
+        goldenSamples={goldenSamples}
+      />
 
-                    {/* ── PDI STEP 0: Data Entry ── */}
-                    {pdiStep === 0 && (
-                      <div className="entrance-fade">
-                        <div style={S.section}>
-                          <div style={S.sectionTitle}>Motor Identity</div>
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10 }}>
-                            <div style={{ gridColumn: "1 / -1", marginBottom: 4 }}>
-                              <label style={S.label}>Work Order <span style={{ color: activeTheme.error }}>*</span></label>
-                              <select
-                                style={{ ...S.input, padding: "8px 10px", flex: 1, opacity: workOrders.length === 0 ? 0.6 : 1 }}
-                                value={form.workOrderId}
-                                disabled={workOrders.length === 0}
-                                onChange={e => handleWorkOrderChange(e.target.value)}
-                              >
-                                <option value="">{workOrders.length === 0 ? "No work orders available" : "Select Work Order"}</option>
-                                {workOrders.map(wo => {
-                                  const prog = programs.find(p => p.id === wo.programId);
-                                  return <option key={wo.id} value={wo.id}>{wo.refId} - {wo.title} {prog ? `(${prog.name})` : ''}</option>;
-                                })}
-                              </select>
-                            </div>
-                            <div style={{ gridColumn: "1 / -1", marginBottom: 4 }}>
-                              <label style={S.label}>Model / Part <span style={{ color: activeTheme.error }}>*</span></label>
-                              <select
-                                style={{ ...S.input, padding: "8px 10px", flex: 1, opacity: !selectedWO ? 0.6 : 1 }}
-                                value={form.itemIdx}
-                                disabled={!selectedWO}
-                                onChange={e => handleItemChange(e.target.value)}
-                              >
-                                <option value="">{selectedWO ? "Select Model/Part" : "Select a Work Order first"}</option>
-                                {selectedWO && selectedWO.items.map((item, idx) =>
-                                  <option key={idx} value={idx}>{item.modelNumber} - {item.partNumber}</option>
-                                )}
-                              </select>
-                            </div>
-                            <MField label="Serial No" value={form.serialNo} onChange={F("serialNo")} S={S} theme={activeTheme} disabled={!canEditQiPdi} />
-                            <MField label="Test Date" type="date" value={form.testDate} onChange={F("testDate")} S={S} theme={activeTheme} disabled={!canEditQiPdi} />
-                            <div style={{ marginBottom: 10 }}>
-                              <label style={S.label}>Part No.</label>
-                              <select
-                                style={{ ...S.input, padding: "8px 10px", flex: 1, opacity: !canEditQiPdi ? 0.6 : 1 }}
-                                value={form.motorCode}
-                                disabled={!canEditQiPdi}
-                                onChange={e => handleQiPdiRefSelection(e.target.value)}
-                              >
-                                <option value="">Select Part No.</option>
-                                {qiPdiRefSamples.map(s => <option key={s.motorCode} value={s.motorCode}>{s.motorCode}</option>)}
-                              </select>
-                            </div>
-                            <MField label="Motor Model" value={form.motorModel} onChange={F("motorModel")} S={S} theme={activeTheme} disabled={!canEditQiPdi} />
-                            <MField label="Tested By" value={form.testedBy} onChange={F("testedBy")} S={S} theme={activeTheme} disabled={!canEditQiPdi} />
-                          </div>
-                        </div>
+      <QiPdiPreviewModal
+        report={previewQiPdi}
+        show={showQiPdiModal}
+        onClose={() => setShowQiPdiModal(false)}
+        onDownload={handleDownloadQiPdiPDF}
+        reportRef={qiPdiReportRef}
+        S={S}
+        theme={activeTheme}
+      />
 
-                        <div style={S.section}>
-                          <div style={S.sectionTitle}>Inspection Checklist</div>
-                          <table style={{ ...S.table, tableLayout: 'fixed' }}>
-                            <thead>
-                              <tr>
-                                <th style={{ ...S.th, width: 60 }}>S.No</th>
-                                <th style={{ ...S.th, width: 240 }}>Description</th>
-                                <th style={{ ...S.th, width: 240 }}>Specification</th>
-                                <th style={{ ...S.th, width: 240 }}>Method of Check</th>
-                                <th style={S.th}>Observed</th>
-                                <th style={{ ...S.th, width: 120 }}>Status</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {qiPdiData.map((item, idx) => {
-                                const isLastRow = idx === qiPdiData.length - 1;
-                                return (
-                                  <tr key={item.no} style={{ background: idx % 2 === 0 ? activeTheme.surfaceAlt : activeTheme.surface }}>
-                                    <td style={S.td}>{item.no}</td>
-                                    <td style={S.td}>{item.desc}</td>
-                                    {isLastRow ? (
-                                      <td colSpan={4} style={S.td}>
-                                        <textarea
-                                          style={{ ...S.input, padding: "4px 8px", fontSize: 12, minHeight: "40px", resize: "vertical", fontFamily: "inherit" }}
-                                          value={item.observed}
-                                          onChange={e => {
-                                            const newData = [...qiPdiData];
-                                            newData[idx].observed = e.target.value;
-                                            setQiPdiData(newData);
-                                          }}
-                                          placeholder="Enter deviations or general comments..."
-                                        />
-                                      </td>
-                                    ) : (
-                                      <>
-                                        <td style={S.td}>{item.spec}</td>
-                                        <td style={S.td}>{item.method}</td>
-                                        <td style={S.td}>
-                                          <textarea
-                                            style={{ ...S.input, padding: "4px 8px", fontSize: 12, minHeight: "40px", resize: "vertical", fontFamily: "inherit" }}
-                                            value={item.observed}
-                                            onChange={e => {
-                                              const newData = [...qiPdiData];
-                                              newData[idx].observed = e.target.value;
-                                              setQiPdiData(newData);
-                                            }}
-                                          />
-                                        </td>
-                                        <td style={S.td}>
-                                          <select
-                                            style={{
-                                              ...S.input,
-                                              padding: "4px 8px",
-                                              fontSize: 12,
-                                              background: item.status === "OK" ? "#dcfce7" : (item.status === "NOT OK" ? "#fee2e2" : (item.status === "NOT OK, But Motor Performance Not Impacted" ? "#fef9c3" : activeTheme.surfaceAlt)),
-                                              color: item.status === "OK" ? "#15803d" : (item.status === "NOT OK" ? "#b91c1c" : (item.status === "NOT OK, But Motor Performance Not Impacted" ? "#854d0e" : activeTheme.text))
-                                            }}
-                                            value={item.status}
-                                            onChange={e => {
-                                              const newData = [...qiPdiData];
-                                              newData[idx].status = e.target.value;
-                                              setQiPdiData(newData);
-                                            }}
-                                          >
-                                            <option value="">Select</option>
-                                            <option value="OK">OK</option>
-                                            <option value="NOT OK">NOT OK</option>
-                                            <option value="NOT OK, But Motor Performance Not Impacted">NOT OK, But Motor Performance Not Impacted</option>
-                                          </select>
-                                        </td>
-                                      </>
-                                    )}
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20, gap: 10, alignItems: "center" }}>
-                            <div style={{ marginRight: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-                              <span style={{ fontSize: 11, fontWeight: 800, color: activeTheme.textMuted, letterSpacing: 1 }}>INSPECTION RESULT:</span>
-                              <Badge pass={qiPdiData.filter(i => i.no !== 21).every(i => i.status === "OK" || i.status === "NOT OK, But Motor Performance Not Impacted")} theme={activeTheme} />
-                            </div>
-                            <button style={S.btn("default")} onClick={() => {
-                              setQiPdiData(QI_PDI_DEFAULTS.map(i => ({
-                                ...i,
-                                observed: i.no === 21 ? "Connector push mount not provided, push mount cable tie provided as alternative" : "",
-                                status: ""
-                              })));
-                              setPdiUploadStatus(null);
-                            }}>
-                              Clear Table
-                            </button>
-                            <button style={S.btn("success")} onClick={handleSaveQiPdi} disabled={isSaving}>{isSaving ? "Saving..." : "💾 Save & Generate"}</button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ── PDI STEP 1: Report Preview ── */}
-                    {pdiStep === 1 && (
-                      previewQiPdi ? (
-                        <div>
-                          <div style={{ display: "flex", gap: 12, marginBottom: 20, alignItems: "center" }}>
-                            <button style={S.btn("default")} onClick={() => { setPdiStep(0); setPdiUploadStatus(null); }}>← Edit Data</button>
-                            <button
-                              style={S.btn("success")}
-                              onClick={() => openQiPdiDownload({ serialNo: form.serialNo, motorModel: form.motorModel, testedBy: form.testedBy, data: qiPdiData, testDate: form.testDate })}
-                            >
-                              ⬇ Download PDF
-                            </button>
-                            <button style={S.btn("primary")} onClick={() => window.print()}>⎙ Print Report</button>
-                            <div style={{ flex: 1 }} />
-                            {pdiUploadStatus === 'success' && (
-                              <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: activeTheme.success, fontSize: 11, fontWeight: 700 }}>
-                                <span style={{ fontSize: 16 }}>✓</span> Uploaded
-                              </span>
-                            )}
-                            <button style={S.btn("primary")} onClick={() => setPdiStep(2)}>
-                              {pdiUploadStatus === 'success' ? '✓ Report Uploaded →' : 'Upload Report →'}
-                            </button>
-                          </div>
-                          <div style={{ overflowX: 'auto' }}>
-                            <QiPdiReportContent report={previewQiPdi} reportRef={hiddenPdiRef} S={S} />
-                          </div>
-                        </div>
-                      ) : (
-                        <div style={{ ...S.section, textAlign: 'center', padding: 40 }}>
-                          <div style={{ fontSize: 24, marginBottom: 12 }}>📋</div>
-                          <div style={{ fontWeight: 700, fontSize: 16, color: activeTheme.text, marginBottom: 8 }}>No Report Yet</div>
-                          <div style={{ fontSize: 13, color: activeTheme.textMuted, marginBottom: 20 }}>
-                            Please fill in the data and click <strong>"Save & Generate"</strong> first.
-                          </div>
-                          <button style={S.btn("primary")} onClick={() => setPdiStep(0)}>← Go to Data Entry</button>
-                        </div>
-                      )
-                    )}
-
-                    {/* ── PDI STEP 2: Upload Report ── */}
-                    {pdiStep === 2 && (
-                      previewQiPdi ? (
-                        <div className="entrance-fade">
-                          <div style={{ display: "flex", gap: 12, marginBottom: 20, alignItems: "center" }}>
-                            <button style={S.btn("default")} onClick={() => setPdiStep(1)}>← Back to Report</button>
-                            <div style={{ flex: 1 }} />
-                            {pdiUploadStatus === 'success' && (
-                              <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: activeTheme.success, fontSize: 13, fontWeight: 800 }}>
-                                <span style={{ fontSize: 20 }}>✓</span> Report Uploaded Successfully
-                              </span>
-                            )}
-                            {pdiUploadStatus === 'error' && (
-                              <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: activeTheme.error, fontSize: 13, fontWeight: 800 }}>
-                                <span style={{ fontSize: 20 }}>✗</span> Upload Failed
-                              </span>
-                            )}
-                          </div>
-
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-                            <div style={{ ...S.section }}>
-                              <div style={{ ...S.sectionTitle, marginBottom: 16 }}>Report Summary</div>
-                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px", fontSize: 13 }}>
-                                <span style={{ color: activeTheme.textMuted }}>Serial No:</span>
-                                <span style={{ fontWeight: 600, color: activeTheme.text }}>{form.serialNo || "—"}</span>
-                                <span style={{ color: activeTheme.textMuted }}>Motor Model:</span>
-                                <span style={{ fontWeight: 600, color: activeTheme.text }}>{form.motorModel || "—"}</span>
-                                <span style={{ color: activeTheme.textMuted }}>Part No.:</span>
-                                <span style={{ fontWeight: 600, color: activeTheme.text }}>{form.motorCode || "—"}</span>
-                                <span style={{ color: activeTheme.textMuted }}>Test Date:</span>
-                                <span style={{ fontWeight: 600, color: activeTheme.text }}>{form.testDate || "—"}</span>
-                                <span style={{ color: activeTheme.textMuted }}>Tested By:</span>
-                                <span style={{ fontWeight: 600, color: activeTheme.text }}>{form.testedBy || "—"}</span>
-                              </div>
-                            </div>
-
-                            <div style={{ ...S.section, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, textAlign: "center" }}>
-                              {pdiUploadStatus === null && (
-                                <>
-                                  <div style={{ fontSize: 40 }}>📄</div>
-                                  <div style={{ fontWeight: 700, color: activeTheme.text }}>Ready to Upload</div>
-                                  <div style={{ fontSize: 12, color: activeTheme.textMuted, maxWidth: 280 }}>
-                                    Upload the PDI report to the traceability system for approval.
-                                  </div>
-                                  <button className="btn-interact" style={S.btn("primary")} onClick={handleUploadPdiReport}>
-                                    Upload Report
-                                  </button>
-                                </>
-                              )}
-                              {pdiUploadStatus === 'uploading' && (
-                                <>
-                                  <div style={{ width: 48, height: 48, borderRadius: '50%', border: `4px solid ${activeTheme.border}`, borderTopColor: activeTheme.primary, animation: 'spin 0.8s linear infinite' }} />
-                                  <div style={{ fontWeight: 700, color: activeTheme.primary }}>Uploading PDI Report...</div>
-                                  <div style={{ fontSize: 12, color: activeTheme.textMuted }}>Please wait while the report is being uploaded.</div>
-                                </>
-                              )}
-                              {pdiUploadStatus === 'success' && (
-                                <>
-                                  <div style={{ width: 64, height: 64, borderRadius: '50%', background: activeTheme.success + '20', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <span style={{ fontSize: 32, color: activeTheme.success }}>✓</span>
-                                  </div>
-                                  <div style={{ fontWeight: 700, fontSize: 16, color: activeTheme.success }}>PDI Report Uploaded!</div>
-                                  <div style={{ fontSize: 12, color: activeTheme.textMuted, maxWidth: 300 }}>
-                                    The PDI report has been successfully uploaded and linked to the traceability record for <strong>{form.serialNo}</strong>.
-                                  </div>
-                                  <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-                                    <button className="btn-interact" style={S.btn("default")} onClick={() => setPdiStep(1)}>← Back to Report</button>
-                                    <button className="btn-interact" style={S.btn("default")} onClick={handleUploadPdiReport}>Upload Again</button>
-                                  </div>
-                                </>
-                              )}
-                              {pdiUploadStatus === 'error' && (
-                                <>
-                                  <div style={{ width: 64, height: 64, borderRadius: '50%', background: activeTheme.error + '20', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <span style={{ fontSize: 32, color: activeTheme.error }}>✗</span>
-                                  </div>
-                                  <div style={{ fontWeight: 700, fontSize: 16, color: activeTheme.error }}>Upload Failed</div>
-                                  <div style={{ fontSize: 12, color: activeTheme.textMuted, maxWidth: 300 }}>
-                                    The PDI report could not be uploaded. Please check your connection and try again.
-                                  </div>
-                                  <button className="btn-interact" style={S.btn("error")} onClick={handleUploadPdiReport}>Retry Upload</button>
-                                </>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Hidden PDI report for upload purposes */}
-                          <div style={{ position: 'absolute', left: '-9999px', top: 0, width: '1360px' }}>
-                            <QiPdiReportContent report={previewQiPdi} reportRef={hiddenPdiRef} S={S} />
-                          </div>
-                        </div>
-                      ) : (
-                        <div style={{ ...S.section, textAlign: 'center', padding: 40 }}>
-                          <div style={{ fontSize: 24, marginBottom: 12 }}>📋</div>
-                          <div style={{ fontWeight: 700, fontSize: 16, color: activeTheme.text, marginBottom: 8 }}>No Report to Upload</div>
-                          <div style={{ fontSize: 13, color: activeTheme.textMuted, marginBottom: 20 }}>
-                            Please fill in the data and click <strong>"Save & Generate"</strong> first.
-                          </div>
-                          <button style={S.btn("primary")} onClick={() => setPdiStep(0)}>← Go to Data Entry</button>
-                        </div>
-                      )
-                    )}
-                  </>
-                )}
-              </div>
-            </main>
-          <ReportPreviewModal
-            motor={previewMotor}
-            show={showPreviewModal}
-            onClose={() => setShowPreviewModal(false)}
-            onDownload={openReportDownload}
-            reportRef={reportRef}
-            S={S}
-            theme={activeTheme}
-            currentUser={currentUser}
-            goldenSamples={goldenSamples}
-          />
-
-          <QiPdiPreviewModal
-            report={previewQiPdi}
-            show={showQiPdiModal}
-            onClose={() => setShowQiPdiModal(false)}
-            onDownload={handleDownloadQiPdiPDF}
-            reportRef={qiPdiReportRef}
-            S={S}
-            theme={activeTheme}
-          />
-
-        <style>{`
+      <style>{`
         @keyframes fadeInUp {
           from { opacity: 0; transform: translateY(15px); }
           to { opacity: 1; transform: translateY(0); }

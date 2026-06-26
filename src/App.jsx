@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import './App.css'
 import PurchaseOrderProduction from './PurchaseOrderProduction'
 import PurchaseOrder from './PurchaseOrder'
-import MotorTraceability from './MotorTraceability'
+import PartTraceability from './PartTraceability'
 import EolPdiApp from './EolPdiApp.jsx'
 import { API_BASE_URL } from "./constants"
 import { formatDate } from './utils/formatDate'
@@ -151,6 +151,7 @@ function App() {
   // Notification State
   const [notifications, setNotifications] = useState([])
   const [showNotificationPanel, setShowNotificationPanel] = useState(false)
+  const [notifStatus, setNotifStatus] = useState('loading')
   const [viewingRequestDetails, setViewingRequestDetails] = useState(null)
   const [isReassigning, setIsReassigning] = useState(false)
   const [targetReassignUser, setTargetReassignUser] = useState('')
@@ -283,23 +284,28 @@ function App() {
     const targetUser = usernameOverride || loginForm.username;
 
     if (!("Notification" in window)) {
+      setNotifStatus('unsupported');
       showToast("This browser does not support desktop notifications. Real-time alerts will be disabled.", "warning");
       return;
     }
 
     if (Notification.permission === "denied") {
+      setNotifStatus('denied');
       showToast("Notifications are blocked! Please enable them in your browser settings to receive real-time approval updates.", "warning");
       return;
     }
 
     if (Notification.permission === "default") {
+      setNotifStatus('default');
       const permission = await Notification.requestPermission();
       if (permission === "denied") {
+        setNotifStatus('denied');
         showToast("Notification permission denied. You will not receive real-time alerts.", "warning");
         return;
       }
     }
 
+    setNotifStatus('granted');
     if (!targetUser) return;
 
     if ("serviceWorker" in navigator) {
@@ -775,15 +781,56 @@ function App() {
     syncToDisk({ key: 'deliveryPlanning', data: newDeliveryPlanning });
   };
 
-  const addNotification = (userId, message, requestId) => {
+  const notificationSound = useRef(null);
+
+  const playNotificationSound = () => {
+    try {
+      if (!notificationSound.current) {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        notificationSound.current = ctx;
+      }
+      const ctx = notificationSound.current;
+      if (ctx.state === 'suspended') ctx.resume();
+
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+      oscillator.frequency.setValueAtTime(1108, ctx.currentTime + 0.1);
+
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+
+      oscillator.start(ctx.currentTime);
+      oscillator.stop(ctx.currentTime + 0.3);
+    } catch {
+      // Audio not supported, silently skip
+    }
+  };
+
+  const notificationTitle = (message) => {
+    if (message.toLowerCase().includes('approved')) return '✅ Approved';
+    if (message.toLowerCase().includes('reject')) return '❌ Rejected';
+    if (message.toLowerCase().includes('new')) return '📥 New Update';
+    if (message.toLowerCase().includes('reassign')) return '🔄 Reassigned';
+    return '🔔 ARPL Update';
+  };
+
+  const addNotification = (userId, message, requestId, page = '') => {
     const newNotif = {
-      id: Date.now(),
+      id: `n_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       userId,
       message,
       requestId,
+      page,
       isRead: false,
       time: new Date().toISOString()
     }
+
+    playNotificationSound();
 
     // Trigger Browser Push via Server
     fetch(`${API_BASE_URL}/api/notify`, {
@@ -797,13 +844,14 @@ function App() {
       })
     }).catch(err => console.error("Push notification trigger failed", err));
 
-    if (Notification.permission === "granted" && document.visibilityState !== 'visible') {
+    if (Notification.permission === "granted") {
       try {
-        new Notification("ARPL Dashboard Update", {
+        new Notification(notificationTitle(message), {
           body: message,
           icon: "/AR LOGO.png",
           tag: requestId ? `req-${requestId}` : 'general',
-          silent: false
+          silent: false,
+          requireInteraction: true
         });
         // eslint-disable-next-line no-unused-vars
       } catch (e) {
@@ -811,9 +859,11 @@ function App() {
       }
     }
 
-    const updated = [newNotif, ...notifications].slice(0, 50)
-    setNotifications(updated)
-    syncToDisk({ key: 'notifications', data: updated })
+    setNotifications(prev => {
+      const updated = [newNotif, ...prev].slice(0, 50);
+      syncToDisk({ key: 'notifications', data: updated });
+      return updated;
+    });
   }
 
   const markAsRead = (id) => {
@@ -922,7 +972,6 @@ function App() {
 
         setIsLoggedIn(true)
         setupPushNotifications()
-        loadDataFromDisk()
       } else {
         showToast('Please enter valid credentials.', 'error')
       }
@@ -1064,11 +1113,7 @@ function App() {
     localStorage.removeItem('arpl_token')
     localStorage.removeItem('arpl_username')
     setLoginForm({ username: '', password: '' })
-
-    // Reset page to dashboard for next login
-    setTimeout(() => {
-      setCurrentPage('po')
-    }, 100)
+    setCurrentPage('po')
   }
 
   const handleWorkflowAction = (requestId, action, remarks, extraData = {}) => {
@@ -1159,7 +1204,7 @@ function App() {
 
     setPoRequests(updatedRequests)
     syncToDisk({ key: 'poRequests', data: updatedRequests })
-    addNotification(targetUser, msg, requestId)
+    addNotification(targetUser, msg, requestId, 'po')
     setReviewingRequest(null)
     showToast(`Request ${action}ed successfully.`)
   }
@@ -1200,7 +1245,7 @@ function App() {
 
     setPoRequests(updated)
     syncToDisk({ key: 'poRequests', data: updated })
-    addNotification(newUser, `A request "${request.title}" has been reassigned to you for approval.`, requestId)
+    addNotification(newUser, `A request "${request.title}" has been reassigned to you for approval.`, requestId, 'po')
     setReviewingRequest(null)
     setIsReassigning(false)
     setTargetReassignUser('')
@@ -1218,7 +1263,7 @@ function App() {
 
       // Notify Admin/Owner if they were involved
       const req = poRequests.find(r => r.id === requestId)
-      addNotification(req.programOwner, `User cancelled request: ${req.title}`, requestId)
+      addNotification(req.programOwner, `User cancelled request: ${req.title}`, requestId, 'po')
     }
   }
 
@@ -1361,6 +1406,7 @@ function App() {
       return
     }
 
+    const isEditing = !!editVendorId;
     let updatedVendors;
     if (editVendorId) {
       updatedVendors = vendors.map(v => v.id === editVendorId ? { ...v, ...vendorForm } : v)
@@ -1371,6 +1417,7 @@ function App() {
     setVendors(updatedVendors)
     syncToDisk({ key: 'vendors', data: updatedVendors })
     resetVendorForm()
+    showToast(isEditing ? 'Vendor updated!' : 'Vendor added!')
   }
 
   const resetVendorForm = () => {
@@ -1480,6 +1527,7 @@ function App() {
       return
     }
 
+    const isEditing = !!editPartId;
     let updatedParts;
     if (editPartId) {
       updatedParts = parts.map(p => p.id === editPartId ? { ...p, ...partForm } : p)
@@ -1490,6 +1538,7 @@ function App() {
     setParts(updatedParts)
     syncToDisk({ key: 'parts', data: updatedParts })
     resetPartForm()
+    showToast(isEditing ? 'Part updated!' : 'Part added!')
   }
 
   const resetPartForm = () => {
@@ -1519,7 +1568,7 @@ function App() {
     else if (req.status === 'Pending Head') targetUser = 'Program Head';
 
     if (targetUser) {
-      addNotification(targetUser, `Follow-up request for "${req.title}" from ${loginForm.username}`, req.id);
+      addNotification(targetUser, `Follow-up request for "${req.title}" from ${loginForm.username}`, req.id, 'po');
       showToast(`Follow-up notification sent to ${targetUser}`);
     } else {
       showToast("No pending approver found.", "error");
@@ -1572,9 +1621,10 @@ function App() {
   };
 
   const updatePOItem = (index, field, value) => {
-    const updated = [...poRequestForm.items];
-    updated[index][field] = value;
-    setPoRequestForm(prev => ({ ...prev, items: updated }));
+    setPoRequestForm(prev => ({
+      ...prev,
+      items: prev.items.map((item, i) => i === index ? { ...item, [field]: value } : item)
+    }));
   };
 
   const handleSavePORequest = () => {
@@ -1621,8 +1671,8 @@ function App() {
         history: [historyEntry]
       }
       updated = [newRequest, ...poRequests]
-      addNotification(poRequestForm.programOwner, `New PO Request from ${loginForm.username}: ${poRequestForm.title}`, newRequest.id)
-      addNotification('Program Head', `New PO Request from ${loginForm.username} (Requires Owner Approval): ${poRequestForm.title}`, newRequest.id)
+      addNotification(poRequestForm.programOwner, `New PO Request from ${loginForm.username}: ${poRequestForm.title}`, newRequest.id, 'po')
+      addNotification('Program Head', `New PO Request from ${loginForm.username} (Requires Owner Approval): ${poRequestForm.title}`, newRequest.id, 'po')
     }
 
     setPoRequests(updated)
@@ -1631,11 +1681,10 @@ function App() {
     // Reset Form
     setPoRequestForm({
       title: '', vendorId: '', type: 'PO', category: 'Prototypes (BO & Machining)',
-      workOrderId: '', programName: '', programOwner: '', programAdmin: '', budgetCode: '',
+      workOrderId: '', programName: '', programOwner: '', programAdmin: 'Program Admin', budgetCode: '',
       items: [{ partDrawing: '', partName: '', unit: 'Nos.', qty: '', unitPrice: '' }],
       paymentMode: 'Credit', paymentComments: '', deliveryValue: '', deliveryUnit: 'Days',
       qualityAssurance: false, qualityTC: false, remarks: '', fileName: ''
-      , programAdmin: 'Program Admin'
     })
     setEditingRequestId(null)
 
@@ -1693,7 +1742,7 @@ function App() {
       try {
         setUploadProgress(1);
         const fileName = await uploadFile(file);
-        setPoRequestForm({ ...poRequestForm, fileName: fileName })
+        setPoRequestForm(prev => ({ ...prev, fileName }))
         setTimeout(() => setUploadProgress(0), 1500);
       } catch (error) {
         console.error("Upload failed", error);
@@ -1761,14 +1810,21 @@ function App() {
     const headers = ["Date", "Title", "Program", "Vendor", "Qty", "Unit Price", "Total Amount", "Status"];
     const rows = filteredReportData.map(req => {
       const vendorName = vendors.find(v => String(v.id) === String(req.vendorId))?.name || req.vendorId || 'N/A';
+      let qty = req.qty;
+      let unitPrice = req.unitPrice;
+      if (req.items && req.items.length > 0) {
+        qty = req.items.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+        unitPrice = req.items.reduce((sum, item) => sum + (Number(item.qty) || 0) * (Number(item.unitPrice) || 0), 0);
+      }
+      const total = Number(qty) * Number(unitPrice);
       return [
         formatDate(req.createdAt),
         `"${req.title.replace(/"/g, '""')}"`,
         `"${req.programName}"`,
         `"${vendorName}"`,
-        req.qty,
-        req.unitPrice,
-        Number(req.qty) * Number(req.unitPrice),
+        qty || 0,
+        unitPrice || 0,
+        total || 0,
         req.status
       ].join(",");
     });
@@ -1783,10 +1839,16 @@ function App() {
     document.body.removeChild(link);
   };
 
+  const sanitizeHTML = (str) => {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  };
+
   const handleExportPDF = (req) => {
     const isProdPR = req.isProduction && !req.prId;
     const vendor = vendors.find(v => String(v.id) === String(req.vendorId));
     const vendorName = vendor?.name || req.vendorId || 'N/A';
+    const s = sanitizeHTML;
 
     let pdfFilenamePrefix = 'Summary';
     if (req.prId) { // This is a generated PO
@@ -1814,10 +1876,10 @@ function App() {
             </div>
             <div>
               <span style="font-size: 12px; color: #64748b; text-transform: uppercase; display: block;">BOM Reference</span>
-              <strong style="font-size: 14px; color: #1e293b;">${req.fileName || 'Linked Electronic BOM'}</strong>
+              <strong style="font-size: 14px; color: #1e293b;">${s(req.fileName || 'Linked Electronic BOM')}</strong>
             </div>
           </div>
-          ${req.remarks ? `<div style="margin-top: 15px; font-size: 13px; color: #475569; border-top: 1px dashed #cbd5e1; padding-top: 10px;"><strong>Remarks:</strong> ${req.remarks}</div>` : ''}
+          ${req.remarks ? `<div style="margin-top: 15px; font-size: 13px; color: #475569; border-top: 1px dashed #cbd5e1; padding-top: 10px;"><strong>Remarks:</strong> ${s(req.remarks)}</div>` : ''}
         </div>
       `;
     } else {
@@ -1826,7 +1888,7 @@ function App() {
 
       const itemRows = items.map(item => `
         <tr>
-          <td><strong>${item.partName}</strong><br/><small style="color: #64748b">Drawing No: ${item.partDrawing}</small></td>
+          <td><strong>${s(item.partName)}</strong><br/><small style="color: #64748b">Drawing No: ${s(item.partDrawing)}</small></td>
           <td style="text-align: center;">${item.qty} ${item.unit}</td>
           <td style="text-align: right;">${symbol}${Number(item.unitPrice || 0).toLocaleString()}</td>
           <td style="text-align: right;">${symbol}${(Number(item.qty || 0) * Number(item.unitPrice || 0)).toLocaleString()}</td>
@@ -1873,11 +1935,11 @@ function App() {
     const historyTimeline = historyData.reverse().map(h => `
       <div class="history-item">
         <div class="history-item-header">
-          <span class="history-item-action">${h.action}</span>
+          <span class="history-item-action">${s(h.action)}</span>
           <span class="history-item-date">${formatDate(h.date)}</span>
         </div>
-        <div class="history-item-user">By ${h.user} (${h.role || 'N/A'})</div>
-        ${h.remarks ? `<div class="history-item-remarks">"${h.remarks}"</div>` : ''}
+        <div class="history-item-user">By ${s(h.user)} (${s(h.role || 'N/A')})</div>
+        ${h.remarks ? `<div class="history-item-remarks">"${s(h.remarks)}"</div>` : ''}
       </div>
     `).join('');
 
@@ -1885,7 +1947,7 @@ function App() {
     newWindow.document.write(`
       <html>
         <head>
-          <title>${req.refId || 'PR'}: ${req.title}</title>
+          <title>${s(req.refId || 'PR')}: ${s(req.title)}</title>
           <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
           <style>
             @page { size: A4; margin: 10mm; }
@@ -1939,8 +2001,8 @@ function App() {
               </div>
               <div class="doc-type">
                 <h2>${isProdPR ? 'Production Purchase Request' : 'Purchase Order Request'}</h2>
-                <div class="ref-badge">${req.refId || '#' + req.id}</div>
-                <div class="status-badge ${statusClass}">${req.status}</div>
+                <div class="ref-badge">${s(req.refId || '#' + req.id)}</div>
+                <div class="status-badge ${statusClass}">${s(req.status)}</div>
                 <div style="font-size: 12px; color: #64748b; margin-top: 5px;">Date: ${formatDate(req.createdAt)}</div>
               </div>
             </div>
@@ -1950,10 +2012,10 @@ function App() {
                 <div class="section-card">
                   <h4>Requester & Program Information</h4>
                   <div class="details-grid">
-                    <div class="detail-item"><strong>Requested By</strong><span>${req.requestedBy}</span></div>
-                    <div class="detail-item"><strong>Program Name</strong><span>${req.programName}</span></div>
-                    <div class="detail-item"><strong>Admin</strong><span>${req.programAdmin || 'N/A'}</span></div>
-                    <div class="detail-item"><strong>Budget Code</strong><span>${req.budgetCode || 'N/A'}</span></div>
+                    <div class="detail-item"><strong>Requested By</strong><span>${s(req.requestedBy)}</span></div>
+                    <div class="detail-item"><strong>Program Name</strong><span>${s(req.programName)}</span></div>
+                    <div class="detail-item"><strong>Admin</strong><span>${s(req.programAdmin || 'N/A')}</span></div>
+                    <div class="detail-item"><strong>Budget Code</strong><span>${s(req.budgetCode || 'N/A')}</span></div>
                     ${(() => {
         const reassignedInfo = getReassignedInfo(req);
         return reassignedInfo ? `
@@ -1969,9 +2031,9 @@ function App() {
                 <div class="section-card">
                   <h4>Vendor Information</h4>
                   <div class="details-grid">
-                    <div class="detail-item"><strong>Vendor Name</strong><span>${isProdPR ? 'Multiple (See BOM)' : vendorName}</span></div>
-                    <div class="detail-item"><strong>GSTIN</strong><span>${vendor?.gstin || 'N/A'}</span></div>
-                    <div class="detail-item"><strong>Email Address</strong><span>${vendor?.email || 'N/A'}</span></div>
+                    <div class="detail-item"><strong>Vendor Name</strong><span>${isProdPR ? 'Multiple (See BOM)' : s(vendorName)}</span></div>
+                    <div class="detail-item"><strong>GSTIN</strong><span>${s(vendor?.gstin || 'N/A')}</span></div>
+                    <div class="detail-item"><strong>Email Address</strong><span>${s(vendor?.email || 'N/A')}</span></div>
                   </div>
                 </div>
 
@@ -1983,9 +2045,9 @@ function App() {
                 <div class="section-card">
                   <h4>Payment & Delivery Terms</h4>
                   <div class="details-grid">
-                    <div class="detail-item"><strong>Payment Mode</strong><span>${req.paymentMode}</span></div>
-                    <div class="detail-item"><strong>Lead Time</strong><span>${req.deliveryValue} ${req.deliveryUnit}</span></div>
-                    <div class="detail-item"><strong>Comments</strong><span>${req.paymentComments || 'No specific comments'}</span></div>
+                    <div class="detail-item"><strong>Payment Mode</strong><span>${s(req.paymentMode)}</span></div>
+                    <div class="detail-item"><strong>Lead Time</strong><span>${s(req.deliveryValue)} ${s(req.deliveryUnit)}</span></div>
+                    <div class="detail-item"><strong>Comments</strong><span>${s(req.paymentComments || 'No specific comments')}</span></div>
                     <div class="detail-item"><strong>Quality TC</strong><span>${req.qualityTC ? 'Required' : 'Not Required'}</span></div>
                   </div>
                 </div>
@@ -2007,7 +2069,7 @@ function App() {
               const element = document.getElementById('pdf-content');
               const opt = {
                 margin:       [10, 10, 10, 10],
-                filename:     '${req.refId || 'PR'}_${pdfFilenamePrefix}.pdf',
+                filename:     '${(req.refId || 'PR').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}_${pdfFilenamePrefix}.pdf',
                 image:        { type: 'jpeg', quality: 0.98 },
                 html2canvas:  { scale: 2, useCORS: true },
                 jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
@@ -2091,20 +2153,34 @@ function App() {
     { id: 'qi_pdi_report', label: 'PDI Report', icon: <FileText size={16} /> },
     { id: 'qi_pdi_dashboard', label: 'PDI Dashboard', icon: <PieChart size={16} /> },
     { id: 'qi_pdi_ref_samples', label: 'Reference Samples', icon: <ShieldCheck size={16} /> },
+    { id: 'approvals', label: 'Approvals', icon: <CheckCircle2 size={16} /> },
     { id: 'archive', label: 'Reports Archive', icon: <History size={16} /> }
   ]
 
   // Calculate pending tasks for Sidebar Badges
   const sidebarBadges = useMemo(() => {
     const roles = currentUserInfo.roles || [];
+
+    // Badges from PO requests pending approval
     const pendingPOs = poRequests.filter(req => {
       if (req.status === 'Pending Owner') return req.programOwner === loginForm.username || roles.includes('Program Head');
       if (req.status === 'Pending Admin') return req.programAdmin === loginForm.username;
       if (req.status === 'Pending Head') return roles.includes('Program Head');
       return false;
     }).length;
-    return { po: pendingPOs };
-  }, [poRequests, currentUserInfo, loginForm.username]);
+
+    // Badges from notifications per page
+    const notifCounts = { po: 0, po_production: 0, motor_traceability: 0, eol_reports: 0, program: 0 };
+    notifications.forEach(n => {
+      if (n.isRead) return;
+      if (n.userId !== loginForm.username && !roles.includes(n.userId)) return;
+      if (n.page && notifCounts.hasOwnProperty(n.page)) {
+        notifCounts[n.page]++;
+      }
+    });
+
+    return { po: pendingPOs + notifCounts.po, po_production: notifCounts.po_production, motor_traceability: notifCounts.motor_traceability, eol_reports: notifCounts.eol_reports, program: notifCounts.program };
+  }, [poRequests, currentUserInfo, loginForm.username, notifications]);
 
   const addWOItemRow = () => {
     setWorkOrderForm(prev => ({
@@ -2117,9 +2193,10 @@ function App() {
     setWorkOrderForm(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== index) }));
   };
   const updateWOItem = (index, field, value) => {
-    const updated = [...workOrderForm.items];
-    updated[index][field] = value;
-    setWorkOrderForm(prev => ({ ...prev, items: updated }));
+    setWorkOrderForm(prev => ({
+      ...prev,
+      items: prev.items.map((item, i) => i === index ? { ...item, [field]: value } : item)
+    }));
   };
 
   // Determine who approved the previous stage for the reviewingRequest modal
@@ -2583,6 +2660,11 @@ function App() {
                   {currentPage === 'po_production' && <motion.div layoutId="sidebar-active" className="active-pill" />}
                   <Briefcase size={20} className="nav-icon" />
                   {!isSidebarCollapsed && <span>Purchase Request - Production</span>}
+                  {sidebarBadges.po_production > 0 && (
+                    <span className={`nav-badge ${isSidebarCollapsed ? 'collapsed' : ''}`}>
+                      {sidebarBadges.po_production}
+                    </span>
+                  )}
                 </motion.button>
               )}
 
@@ -2598,6 +2680,11 @@ function App() {
                   {currentPage === 'program' && <motion.div layoutId="sidebar-active" className="active-pill" />}
                   <LayoutDashboard size={20} className="nav-icon" />
                   {!isSidebarCollapsed && <span>Programs</span>}
+                  {sidebarBadges.program > 0 && (
+                    <span className={`nav-badge ${isSidebarCollapsed ? 'collapsed' : ''}`}>
+                      {sidebarBadges.program}
+                    </span>
+                  )}
                 </motion.button>
               )}
 
@@ -2613,6 +2700,11 @@ function App() {
                   {currentPage === 'motor_traceability' && <motion.div layoutId="sidebar-active" className="active-pill" />}
                   <Wrench size={20} className="nav-icon" />
                   {!isSidebarCollapsed && <span>Part Traceability</span>}
+                  {sidebarBadges.motor_traceability > 0 && (
+                    <span className={`nav-badge ${isSidebarCollapsed ? 'collapsed' : ''}`}>
+                      {sidebarBadges.motor_traceability}
+                    </span>
+                  )}
                 </motion.button>
               )}
 
@@ -2628,6 +2720,11 @@ function App() {
                 {currentPage === 'eol_reports' && <motion.div layoutId="sidebar-active" className="active-pill" />}
                 <FileText size={20} className="nav-icon" />
                 {!isSidebarCollapsed && <span>EOL & PDI Reports</span>}
+                {sidebarBadges.eol_reports > 0 && (
+                  <span className={`nav-badge ${isSidebarCollapsed ? 'collapsed' : ''}`}>
+                    {sidebarBadges.eol_reports}
+                  </span>
+                )}
               </motion.button>
               )}
             </motion.nav>
@@ -2675,6 +2772,26 @@ function App() {
                 <div className="notification-wrapper">
                   <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="header-action-btn" onClick={() => setShowNotificationPanel(!showNotificationPanel)}>
                     <Bell size={18} />
+                    <span
+                      className={`notif-status-dot ${notifStatus}`}
+                      title={
+                        notifStatus === 'granted' ? 'Desktop notifications enabled' :
+                        notifStatus === 'denied' ? 'Desktop notifications blocked' :
+                        notifStatus === 'default' ? 'Click to enable desktop notifications' :
+                        notifStatus === 'unsupported' ? 'Desktop notifications not supported' : ''
+                      }
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (notifStatus === 'denied') {
+                          showToast('Enable notifications in your browser settings (Site Settings > Notifications)', 'info');
+                        } else if (notifStatus === 'default' || notifStatus === 'loading') {
+                          Notification.requestPermission().then(p => {
+                            setNotifStatus(p);
+                            if (p === 'granted') setupPushNotifications();
+                          });
+                        }
+                      }}
+                    />
                     {unreadCount > 0 && (
                       <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="notification-unread-badge">
                         {unreadCount}
@@ -2915,7 +3032,7 @@ function App() {
                               <select value={programForm.owner} onChange={(e) => setProgramForm({ ...programForm, owner: e.target.value })}>
                                 <option value="">-- Select Owner --</option>
                                 {registeredUsers.filter(u => (u.roles || []).some(r => r === 'Program Owner' || r === 'Program Head')).map((u, idx) => (
-                                  <option key={idx} value={u.username}>{u.fullName} ({u.role})</option>
+                                  <option key={idx} value={u.username}>{u.fullName} ({(u.roles || []).join(', ')})</option>
                                 ))}
                               </select>
                             </div>
@@ -3799,7 +3916,7 @@ function App() {
               )}
 
               {currentPage === 'motor_traceability' && checkAccess('motor_traceability') && (
-                <MotorTraceability
+                <PartTraceability
                   workOrders={workOrders}
                   programs={programs}
                   traceabilityData={traceabilityData}
@@ -3858,6 +3975,25 @@ function App() {
 
                       <div style={{ width: 3, background: 'var(--text-sub, #78716c)', borderRadius: 2, margin: '0 6px', flexShrink: 0 }} />
 
+                      {/* Approvals */}
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                        <div style={{ fontSize: 8, fontWeight: 900, letterSpacing: 1.5, color: 'transparent', textTransform: 'uppercase', padding: '0 4px', lineHeight: '12px' }}>&nbsp;</div>
+                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                          {eolNavItems.filter(i => ['approvals'].includes(i.id)).map(item => (
+                            <motion.button
+                              key={item.id}
+                              whileTap={{ scale: 0.95 }}
+                              className={eolView === item.id ? 'active' : ''}
+                              onClick={() => setEolView(item.id)}
+                            >
+                              {item.icon} {item.label}
+                            </motion.button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div style={{ width: 3, background: 'var(--text-sub, #78716c)', borderRadius: 2, margin: '0 6px', flexShrink: 0 }} />
+
                       {/* Archive */}
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                         <div style={{ fontSize: 8, fontWeight: 900, letterSpacing: 1.5, color: 'transparent', textTransform: 'uppercase', padding: '0 4px', lineHeight: '12px' }}>&nbsp;</div>
@@ -3879,6 +4015,7 @@ function App() {
                   <EolPdiApp
                     workOrders={workOrders}
                     programs={programs}
+                    registeredUsers={registeredUsers}
                     traceabilityData={traceabilityData}
                     setTraceabilityData={setTraceabilityData}
                     syncToDisk={syncToDisk}

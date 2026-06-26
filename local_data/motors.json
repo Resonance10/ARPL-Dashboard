@@ -1,1 +1,482 @@
-[]
+[
+  {
+    "id": 1782360143067,
+    "form": {
+      "programName": "Firefly Motor",
+      "motorCode": "ML2A",
+      "motorModel": "C01",
+      "serialNo": "01 TEst",
+      "testDate": "2026-06-24",
+      "testedBy": "GRV",
+      "hipotU": "1",
+      "hipotV": "1",
+      "hipotW": "1",
+      "irU": "9999",
+      "irV": "9999",
+      "irW": "9999",
+      "resU": "15",
+      "resV": "15",
+      "resW": "15",
+      "sineMin": "1150",
+      "sineMax": "2900",
+      "cosMin": "1150",
+      "cosMax": "2900",
+      "sinePP": "1750",
+      "cosPP": "1750",
+      "offset": "766",
+      "workOrderId": "",
+      "itemIdx": "0",
+      "creator": "System Administrator"
+    },
+    "ppData": [
+      {
+        "Speed": 500,
+        "Torque (Nm)": 44.74,
+        "Mot Power (W)": 2342.8,
+        "Group Eff (%)": 50.87,
+        "V_DC (V)": 52.23,
+        "I_DC (A)": 88.19,
+        "I Avg (A)": 237.38
+      },
+      {
+        "Speed": 1000,
+        "Torque (Nm)": 44.7,
+        "Mot Power (W)": 4681.9,
+        "Group Eff (%)": 65.06,
+        "V_DC (V)": 51.84,
+        "I_DC (A)": 138.81,
+        "I Avg (A)": 237.43
+      },
+      {
+        "Speed": 3000,
+        "Torque (Nm)": 18.84,
+        "Mot Power (W)": 5920,
+        "Group Eff (%)": 81.59,
+        "V_DC (V)": 51.87,
+        "I_DC (A)": 139.88,
+        "I Avg (A)": 136.28
+      }
+    ],
+    "bemfData": [
+      {
+        "Speed (RPM)": 500,
+        "RMS_UV (V)": 4.794,
+        "RMS_UW (V)": 4.759,
+        "RMS_VW (V)": 4.783,
+        "Avg BEMF (V)": 4.779,
+        "Ke (V/krpm)": 23.5095
+      },
+      {
+        "Speed (RPM)": 1001,
+        "RMS_UV (V)": 9.439,
+        "RMS_UW (V)": 9.342,
+        "RMS_VW (V)": 9.447,
+        "Avg BEMF (V)": 9.409,
+        "Ke (V/krpm)": 17.871
+      },
+      {
+        "Speed (RPM)": 1501,
+        "RMS_UV (V)": 14.124,
+        "RMS_UW (V)": 13.999,
+        "RMS_VW (V)": 14.153,
+        "Avg BEMF (V)": 14.092,
+        "Ke (V/krpm)": 15.4678
+      },
+      {
+        "Speed (RPM)": 2001,
+        "RMS_UV (V)": 18.778,
+        "RMS_UW (V)": 18.648,
+        "RMS_VW (V)": 18.883,
+        "Avg BEMF (V)": 18.77,
+        "Ke (V/krpm)": 15.3531
+      },
+      {
+        "Speed (RPM)": 2501,
+        "RMS_UV (V)": 23.477,
+        "RMS_UW (V)": 23.303,
+        "RMS_VW (V)": 23.6,
+        "Avg BEMF (V)": 23.46,
+        "Ke (V/krpm)": 14.796
+      },
+      {
+        "Speed (RPM)": 3001,
+        "RMS_UV (V)": 28.211,
+        "RMS_UW (V)": 27.946,
+        "RMS_VW (V)": 28.29,
+        "Avg BEMF (V)": 28.149,
+        "Ke (V/krpm)": 14.5048
+      },
+      {
+        "Speed (RPM)": 3500,
+        "RMS_UV (V)": 32.87,
+        "RMS_UW (V)": 32.662,
+        "RMS_VW (V)": 33.029,
+        "Avg BEMF (V)": 32.854,
+        "Ke (V/krpm)": 14.4082
+      },
+      {
+        "Speed (RPM)": 4001,
+        "RMS_UV (V)": 37.684,
+        "RMS_UW (V)": 37.277,
+        "RMS_VW (V)": 37.739,
+        "Avg BEMF (V)": 37.567,
+        "Ke (V/krpm)": 14.4209
+      },
+      {
+        "Speed (RPM)": 4501,
+        "RMS_UV (V)": 42.339,
+        "RMS_UW (V)": 41.956,
+        "RMS_VW (V)": 42.482,
+        "Avg BEMF (V)": 42.259,
+        "Ke (V/krpm)": 14.2841
+      },
+      {
+        "Speed (RPM)": 5001,
+        "RMS_UV (V)": 47.038,
+        "RMS_UW (V)": 46.535,
+        "RMS_VW (V)": 47.282,
+        "Avg BEMF (V)": 46.951,
+        "Ke (V/krpm)": 14.1929
+      },
+      {
+        "Speed (RPM)": 5501,
+        "RMS_UV (V)": 51.686,
+        "RMS_UW (V)": 51.356,
+        "RMS_VW (V)": 51.999,
+        "Avg BEMF (V)": 51.68,
+        "Ke (V/krpm)": 14.0804
+      }
+    ],
+    "torqueAdj": "1.2",
+    "status": "APPROVED",
+    "overallPass": true,
+    "timestamp": "2026-06-25T04:02:23.062Z",
+    "comment": ""
+  },
+  {
+    "id": 1782360821151,
+    "form": {
+      "programName": "Firefly Motor",
+      "motorCode": "ML2A",
+      "motorModel": "C01",
+      "serialNo": "01 TEst",
+      "testDate": "2026-06-25",
+      "testedBy": "GRV",
+      "hipotU": "3",
+      "hipotV": "3",
+      "hipotW": "3",
+      "irU": "9999",
+      "irV": "9999",
+      "irW": "9999",
+      "resU": "15",
+      "resV": "15",
+      "resW": "15",
+      "sineMin": "1150",
+      "sineMax": "2900",
+      "cosMin": "1150",
+      "cosMax": "2900",
+      "sinePP": "1750",
+      "cosPP": "1750",
+      "offset": "766",
+      "workOrderId": "",
+      "itemIdx": "0",
+      "creator": "System Administrator"
+    },
+    "ppData": [
+      {
+        "Speed": 500,
+        "Torque (Nm)": 44.74,
+        "Mot Power (W)": 2342.8,
+        "Group Eff (%)": 50.87,
+        "V_DC (V)": 52.23,
+        "I_DC (A)": 88.19,
+        "I Avg (A)": 237.38
+      },
+      {
+        "Speed": 1000,
+        "Torque (Nm)": 44.7,
+        "Mot Power (W)": 4681.9,
+        "Group Eff (%)": 65.06,
+        "V_DC (V)": 51.84,
+        "I_DC (A)": 138.81,
+        "I Avg (A)": 237.43
+      },
+      {
+        "Speed": 3000,
+        "Torque (Nm)": 18.84,
+        "Mot Power (W)": 5920,
+        "Group Eff (%)": 81.59,
+        "V_DC (V)": 51.87,
+        "I_DC (A)": 139.88,
+        "I Avg (A)": 136.28
+      },
+      {
+        "Speed": 7000,
+        "Torque (Nm)": 6.05,
+        "Mot Power (W)": 4438,
+        "Group Eff (%)": 71.24,
+        "V_DC (V)": 51.89,
+        "I_DC (A)": 120.06,
+        "I Avg (A)": 105.82
+      }
+    ],
+    "bemfData": [
+      {
+        "Speed (RPM)": 500,
+        "RMS_UV (V)": 4.794,
+        "RMS_UW (V)": 4.759,
+        "RMS_VW (V)": 4.783,
+        "Avg BEMF (V)": 4.779,
+        "Ke (V/krpm)": 23.5095
+      },
+      {
+        "Speed (RPM)": 1001,
+        "RMS_UV (V)": 9.439,
+        "RMS_UW (V)": 9.342,
+        "RMS_VW (V)": 9.447,
+        "Avg BEMF (V)": 9.409,
+        "Ke (V/krpm)": 17.871
+      },
+      {
+        "Speed (RPM)": 1501,
+        "RMS_UV (V)": 14.124,
+        "RMS_UW (V)": 13.999,
+        "RMS_VW (V)": 14.153,
+        "Avg BEMF (V)": 14.092,
+        "Ke (V/krpm)": 15.4678
+      },
+      {
+        "Speed (RPM)": 2001,
+        "RMS_UV (V)": 18.778,
+        "RMS_UW (V)": 18.648,
+        "RMS_VW (V)": 18.883,
+        "Avg BEMF (V)": 18.77,
+        "Ke (V/krpm)": 15.3531
+      },
+      {
+        "Speed (RPM)": 2501,
+        "RMS_UV (V)": 23.477,
+        "RMS_UW (V)": 23.303,
+        "RMS_VW (V)": 23.6,
+        "Avg BEMF (V)": 23.46,
+        "Ke (V/krpm)": 14.796
+      },
+      {
+        "Speed (RPM)": 3001,
+        "RMS_UV (V)": 28.211,
+        "RMS_UW (V)": 27.946,
+        "RMS_VW (V)": 28.29,
+        "Avg BEMF (V)": 28.149,
+        "Ke (V/krpm)": 14.5048
+      },
+      {
+        "Speed (RPM)": 3500,
+        "RMS_UV (V)": 32.87,
+        "RMS_UW (V)": 32.662,
+        "RMS_VW (V)": 33.029,
+        "Avg BEMF (V)": 32.854,
+        "Ke (V/krpm)": 14.4082
+      },
+      {
+        "Speed (RPM)": 4001,
+        "RMS_UV (V)": 37.684,
+        "RMS_UW (V)": 37.277,
+        "RMS_VW (V)": 37.739,
+        "Avg BEMF (V)": 37.567,
+        "Ke (V/krpm)": 14.4209
+      },
+      {
+        "Speed (RPM)": 4501,
+        "RMS_UV (V)": 42.339,
+        "RMS_UW (V)": 41.956,
+        "RMS_VW (V)": 42.482,
+        "Avg BEMF (V)": 42.259,
+        "Ke (V/krpm)": 14.2841
+      },
+      {
+        "Speed (RPM)": 5001,
+        "RMS_UV (V)": 47.038,
+        "RMS_UW (V)": 46.535,
+        "RMS_VW (V)": 47.282,
+        "Avg BEMF (V)": 46.951,
+        "Ke (V/krpm)": 14.1929
+      },
+      {
+        "Speed (RPM)": 5501,
+        "RMS_UV (V)": 51.686,
+        "RMS_UW (V)": 51.356,
+        "RMS_VW (V)": 51.999,
+        "Avg BEMF (V)": 51.68,
+        "Ke (V/krpm)": 14.0804
+      }
+    ],
+    "torqueAdj": "1.2",
+    "status": "APPROVED",
+    "overallPass": true,
+    "timestamp": "2026-06-25T04:13:41.148Z",
+    "comment": ""
+  },
+  {
+    "id": 1782447364941,
+    "form": {
+      "programName": "Firefly Motor",
+      "motorCode": "ML2A",
+      "motorModel": "C01",
+      "serialNo": "04Test",
+      "testDate": "2026-06-26",
+      "testedBy": "GRV",
+      "hipotU": "3",
+      "hipotV": "3",
+      "hipotW": "3",
+      "irU": "999",
+      "irV": "9999",
+      "irW": "9999",
+      "resU": "15",
+      "resV": "15",
+      "resW": "15",
+      "sineMin": "1150",
+      "sineMax": "2900",
+      "cosMin": "1150",
+      "cosMax": "2900",
+      "sinePP": "1750",
+      "cosPP": "1750",
+      "offset": "766",
+      "workOrderId": "",
+      "itemIdx": "",
+      "creator": "System Administrator"
+    },
+    "ppData": [
+      {
+        "Speed": 500,
+        "Torque (Nm)": 44.74,
+        "Mot Power (W)": 2342.8,
+        "Group Eff (%)": 50.87,
+        "V_DC (V)": 52.23,
+        "I_DC (A)": 88.19,
+        "I Avg (A)": 237.38
+      },
+      {
+        "Speed": 1000,
+        "Torque (Nm)": 44.7,
+        "Mot Power (W)": 4681.9,
+        "Group Eff (%)": 65.06,
+        "V_DC (V)": 51.84,
+        "I_DC (A)": 138.81,
+        "I Avg (A)": 237.43
+      },
+      {
+        "Speed": 3000,
+        "Torque (Nm)": 18.84,
+        "Mot Power (W)": 5920,
+        "Group Eff (%)": 81.59,
+        "V_DC (V)": 51.87,
+        "I_DC (A)": 139.88,
+        "I Avg (A)": 136.28
+      },
+      {
+        "Speed": 7000,
+        "Torque (Nm)": 6.05,
+        "Mot Power (W)": 4438,
+        "Group Eff (%)": 71.24,
+        "V_DC (V)": 51.89,
+        "I_DC (A)": 120.06,
+        "I Avg (A)": 105.82
+      }
+    ],
+    "bemfData": [
+      {
+        "Speed (RPM)": 500,
+        "RMS_UV (V)": 4.794,
+        "RMS_UW (V)": 4.759,
+        "RMS_VW (V)": 4.783,
+        "Avg BEMF (V)": 4.779,
+        "Ke (V/krpm)": 23.5095
+      },
+      {
+        "Speed (RPM)": 1001,
+        "RMS_UV (V)": 9.439,
+        "RMS_UW (V)": 9.342,
+        "RMS_VW (V)": 9.447,
+        "Avg BEMF (V)": 9.409,
+        "Ke (V/krpm)": 17.871
+      },
+      {
+        "Speed (RPM)": 1501,
+        "RMS_UV (V)": 14.124,
+        "RMS_UW (V)": 13.999,
+        "RMS_VW (V)": 14.153,
+        "Avg BEMF (V)": 14.092,
+        "Ke (V/krpm)": 15.4678
+      },
+      {
+        "Speed (RPM)": 2001,
+        "RMS_UV (V)": 18.778,
+        "RMS_UW (V)": 18.648,
+        "RMS_VW (V)": 18.883,
+        "Avg BEMF (V)": 18.77,
+        "Ke (V/krpm)": 15.3531
+      },
+      {
+        "Speed (RPM)": 2501,
+        "RMS_UV (V)": 23.477,
+        "RMS_UW (V)": 23.303,
+        "RMS_VW (V)": 23.6,
+        "Avg BEMF (V)": 23.46,
+        "Ke (V/krpm)": 14.796
+      },
+      {
+        "Speed (RPM)": 3001,
+        "RMS_UV (V)": 28.211,
+        "RMS_UW (V)": 27.946,
+        "RMS_VW (V)": 28.29,
+        "Avg BEMF (V)": 28.149,
+        "Ke (V/krpm)": 14.5048
+      },
+      {
+        "Speed (RPM)": 3500,
+        "RMS_UV (V)": 32.87,
+        "RMS_UW (V)": 32.662,
+        "RMS_VW (V)": 33.029,
+        "Avg BEMF (V)": 32.854,
+        "Ke (V/krpm)": 14.4082
+      },
+      {
+        "Speed (RPM)": 4001,
+        "RMS_UV (V)": 37.684,
+        "RMS_UW (V)": 37.277,
+        "RMS_VW (V)": 37.739,
+        "Avg BEMF (V)": 37.567,
+        "Ke (V/krpm)": 14.4209
+      },
+      {
+        "Speed (RPM)": 4501,
+        "RMS_UV (V)": 42.339,
+        "RMS_UW (V)": 41.956,
+        "RMS_VW (V)": 42.482,
+        "Avg BEMF (V)": 42.259,
+        "Ke (V/krpm)": 14.2841
+      },
+      {
+        "Speed (RPM)": 5001,
+        "RMS_UV (V)": 47.038,
+        "RMS_UW (V)": 46.535,
+        "RMS_VW (V)": 47.282,
+        "Avg BEMF (V)": 46.951,
+        "Ke (V/krpm)": 14.1929
+      },
+      {
+        "Speed (RPM)": 5501,
+        "RMS_UV (V)": 51.686,
+        "RMS_UW (V)": 51.356,
+        "RMS_VW (V)": 51.999,
+        "Avg BEMF (V)": 51.68,
+        "Ke (V/krpm)": 14.0804
+      }
+    ],
+    "torqueAdj": "1.2",
+    "status": "APPROVED",
+    "overallPass": true,
+    "timestamp": "2026-06-26T04:16:04.930Z",
+    "comment": ""
+  }
+]

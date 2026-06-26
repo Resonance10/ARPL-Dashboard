@@ -1067,6 +1067,24 @@ textarea {
   position: relative;
 }
 
+.notif-status-dot {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--bg, #fff);
+  cursor: pointer;
+  z-index: 2;
+  transition: background 0.2s;
+}
+.notif-status-dot.granted { background: #22c55e; }
+.notif-status-dot.denied  { background: #ef4444; }
+.notif-status-dot.default,
+.notif-status-dot.loading { background: #f59e0b; }
+.notif-status-dot.unsupported { background: #6b7280; }
+
 .notification-panel {
   position: absolute;
   top: calc(100% + 8px);
@@ -1832,7 +1850,7 @@ textarea {
   transition: height 0.4s ease;
 }
 
-.bar-chart-wrapper .bar.planned { background: var(--border); opacity: 0.5; }
+.bar-chart-wrapper .bar.planned { background: var(--accent); opacity: 0.6; }
 .bar-chart-wrapper .bar.actual { background: var(--accent); }
 .bar-chart-wrapper .bar.actual.delay { background: #ef4444; }
 

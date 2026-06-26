@@ -1,1 +1,718 @@
-[]
+[
+  {
+    "id": 1781758281344,
+    "serialNo": "A260617A000083",
+    "testDate": "2026-06-17",
+    "motorModel": "ML2A",
+    "motorCode": "ML2A05-C01",
+    "testedBy": "SDR",
+    "data": [
+      {
+        "no": 1,
+        "desc": "Spigot Seat",
+        "spec": "154.90 (0.00/-0.03) mm",
+        "method": "OD Snap gauge",
+        "observed": "Snape gauge Checked",
+        "status": "OK"
+      },
+      {
+        "no": 2,
+        "desc": "Front Mounting Thread",
+        "spec": "3x M6x1 - 6H, depth 18.00 mm",
+        "method": "Plug gauge check found OK",
+        "observed": "Plug gauge check found OK",
+        "status": "OK"
+      },
+      {
+        "no": 3,
+        "desc": "Shaft OD Total Runout Wrt Datum B",
+        "spec": "0.1 mm",
+        "method": "Total Indicator Reading",
+        "observed": "0.02 mm ok",
+        "status": "OK"
+      },
+      {
+        "no": 4,
+        "desc": "Shaft Front Face to Front Mount Spigot Seating Distance",
+        "spec": "28.20 ± 0.50 mm",
+        "method": "Height Gauge",
+        "observed": "27.94 mm",
+        "status": "OK"
+      },
+      {
+        "no": 5,
+        "desc": "Shaft Spline",
+        "spec": "As per Drawing",
+        "method": "Master Spline",
+        "observed": "Mating ok",
+        "status": "OK"
+      },
+      {
+        "no": 6,
+        "desc": "Dry Leak Test",
+        "spec": "at Min. 0.2 bar",
+        "method": "Pressurised air and foam water",
+        "observed": "No leak Observed",
+        "status": "OK"
+      },
+      {
+        "no": 7,
+        "desc": "Thermister Fuction",
+        "spec": "Resistance at room temperature",
+        "method": "Resistance meter",
+        "observed": "1160  Ω",
+        "status": "OK"
+      },
+      {
+        "no": 8,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 1 - Red (Vdd (+5V))",
+        "method": "Visual",
+        "observed": "Verified ok",
+        "status": "OK"
+      },
+      {
+        "no": 9,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 2 - White (PT 1000 +ve)",
+        "method": "Visual",
+        "observed": "Verified ok",
+        "status": "OK"
+      },
+      {
+        "no": 10,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 3 - Yellow (Sin output)",
+        "method": "Visual",
+        "observed": "Verified ok",
+        "status": "OK"
+      },
+      {
+        "no": 11,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 4 - Blue (Cos output)",
+        "method": "Visual",
+        "observed": "Verified ok",
+        "status": "OK"
+      },
+      {
+        "no": 12,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 5 - Black (Common GND)",
+        "method": "Visual",
+        "observed": "Verified ok",
+        "status": "OK"
+      },
+      {
+        "no": 13,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 6 - Green (Shield + Wire)",
+        "method": "Visual",
+        "observed": "Verified ok",
+        "status": "OK"
+      },
+      {
+        "no": 14,
+        "desc": "Motor Length",
+        "spec": "177.8 (+/- 1.5)",
+        "method": "Height Gauge",
+        "observed": "177.04 mm",
+        "status": "OK"
+      },
+      {
+        "no": 15,
+        "desc": "Motor Weight",
+        "spec": "12.1 (+/- 0.15)",
+        "method": "Weight Scale",
+        "observed": "12.136 Kg",
+        "status": "OK"
+      },
+      {
+        "no": 16,
+        "desc": "Phase Cable Grommet",
+        "spec": "Manual Assembly",
+        "method": "Visual",
+        "observed": "Provided.",
+        "status": "OK"
+      },
+      {
+        "no": 17,
+        "desc": "Terminal Cover",
+        "spec": "Manual Assembly",
+        "method": "Visual",
+        "observed": "Provided.",
+        "status": "OK"
+      },
+      {
+        "no": 18,
+        "desc": "Terminal Cover Assembly Bolts",
+        "spec": "Manual Assembly",
+        "method": "Visual",
+        "observed": "Provided.",
+        "status": "OK"
+      },
+      {
+        "no": 19,
+        "desc": "Phase Cable Assembly Bolts",
+        "spec": "Manual Assembly",
+        "method": "Visual",
+        "observed": "Provided.",
+        "status": "OK"
+      },
+      {
+        "no": 20,
+        "desc": "Visual Defects",
+        "spec": "Free From Rust, Dust, Physical Damage, Loose fitments, Missing Components ",
+        "method": "Visual",
+        "observed": "All aspects checked, no defects found",
+        "status": "OK"
+      },
+      {
+        "no": 21,
+        "desc": "Deviations if any",
+        "spec": "—",
+        "method": "—",
+        "observed": "",
+        "status": ""
+      }
+    ],
+    "timestamp": "2026-06-18T04:51:19.422Z"
+  },
+  {
+    "id": 1782290892359,
+    "serialNo": "01 TEst",
+    "testDate": "2026-06-24",
+    "motorModel": "C01",
+    "motorCode": "ML2A",
+    "testedBy": "GRV",
+    "data": [
+      {
+        "no": 1,
+        "desc": "Spigot Seat",
+        "spec": "154.90 (0.00/-0.03) mm",
+        "method": "OD Snap gauge",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 2,
+        "desc": "Front Mounting Thread",
+        "spec": "3x M6x1 - 6H, depth 18.00 mm",
+        "method": "Plug gauge check found OK",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 3,
+        "desc": "Shaft OD Total Runout Wrt Datum B",
+        "spec": "0.1 mm",
+        "method": "Total Indicator Reading",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 4,
+        "desc": "Shaft Front Face to Front Mount Spigot Seating Distance",
+        "spec": "28.20 ± 0.50 mm",
+        "method": "Height Gauge",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 5,
+        "desc": "Shaft Spline",
+        "spec": "As per Drawing",
+        "method": "Master Spline",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 6,
+        "desc": "Dry Leak Test",
+        "spec": "at Min. 0.2 bar",
+        "method": "Pressurised air and foam water",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 7,
+        "desc": "Thermister Fuction",
+        "spec": "Resistance at room temperature",
+        "method": "Resistance meter",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 8,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 1 - Red (Vdd (+5V))",
+        "method": "Visual",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 9,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 2 - White (PT 1000 +ve)",
+        "method": "Visual",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 10,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 3 - Yellow (Sin output)",
+        "method": "Visual",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 11,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 4 - Blue (Cos output)",
+        "method": "Visual",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 12,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 5 - Black (Common GND)",
+        "method": "Visual",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 13,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 6 - Green (Shield + Wire)",
+        "method": "Visual",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 14,
+        "desc": "Motor Length",
+        "spec": "177.8 (+/- 1.5)",
+        "method": "Height Gauge",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 15,
+        "desc": "Motor Weight",
+        "spec": "12.1 (+/- 0.15)",
+        "method": "Weight Scale",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 16,
+        "desc": "Phase Cable Grommet",
+        "spec": "Manual Assembly",
+        "method": "Visual",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 17,
+        "desc": "Terminal Cover",
+        "spec": "Manual Assembly",
+        "method": "Visual",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 18,
+        "desc": "Terminal Cover Assembly Bolts",
+        "spec": "Manual Assembly",
+        "method": "Visual",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 19,
+        "desc": "Phase Cable Assembly Bolts",
+        "spec": "Manual Assembly",
+        "method": "Visual",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 20,
+        "desc": "Visual Defects",
+        "spec": "Free From Rust, Dust, Physical Damage, Loose fitments, Missing Components ",
+        "method": "Visual",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 21,
+        "desc": "Deviations if any",
+        "spec": "—",
+        "method": "—",
+        "observed": "",
+        "status": ""
+      }
+    ],
+    "timestamp": "2026-06-24T08:48:12.334Z"
+  },
+  {
+    "id": 1782294502192,
+    "serialNo": "03 TEST",
+    "testDate": "2026-06-24",
+    "motorModel": "ML2A",
+    "motorCode": "ML2A05-C01",
+    "testedBy": "GRV",
+    "data": [
+      {
+        "no": 1,
+        "desc": "Spigot Seat",
+        "spec": "154.90 (0.00/-0.03) mm",
+        "method": "OD Snap gauge",
+        "observed": "",
+        "status": "OK"
+      },
+      {
+        "no": 2,
+        "desc": "Front Mounting Thread",
+        "spec": "3x M6x1 - 6H, depth 18.00 mm",
+        "method": "Plug gauge check found OK",
+        "observed": "",
+        "status": "OK"
+      },
+      {
+        "no": 3,
+        "desc": "Shaft OD Total Runout Wrt Datum B",
+        "spec": "0.1 mm",
+        "method": "Total Indicator Reading",
+        "observed": "",
+        "status": "OK"
+      },
+      {
+        "no": 4,
+        "desc": "Shaft Front Face to Front Mount Spigot Seating Distance",
+        "spec": "28.20 ± 0.50 mm",
+        "method": "Height Gauge",
+        "observed": "",
+        "status": "OK"
+      },
+      {
+        "no": 5,
+        "desc": "Shaft Spline",
+        "spec": "As per Drawing",
+        "method": "Master Spline",
+        "observed": "",
+        "status": "OK"
+      },
+      {
+        "no": 6,
+        "desc": "Dry Leak Test",
+        "spec": "at Min. 0.2 bar",
+        "method": "Pressurised air and foam water",
+        "observed": "",
+        "status": "OK"
+      },
+      {
+        "no": 7,
+        "desc": "Thermister Fuction",
+        "spec": "Resistance at room temperature",
+        "method": "Resistance meter",
+        "observed": "",
+        "status": "OK"
+      },
+      {
+        "no": 8,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 1 - Red (Vdd (+5V))",
+        "method": "Visual",
+        "observed": "",
+        "status": "OK"
+      },
+      {
+        "no": 9,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 2 - White (PT 1000 +ve)",
+        "method": "Visual",
+        "observed": "",
+        "status": "OK"
+      },
+      {
+        "no": 10,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 3 - Yellow (Sin output)",
+        "method": "Visual",
+        "observed": "",
+        "status": "OK"
+      },
+      {
+        "no": 11,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 4 - Blue (Cos output)",
+        "method": "Visual",
+        "observed": "",
+        "status": "OK"
+      },
+      {
+        "no": 12,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 5 - Black (Common GND)",
+        "method": "Visual",
+        "observed": "",
+        "status": "OK"
+      },
+      {
+        "no": 13,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 6 - Green (Shield + Wire)",
+        "method": "Visual",
+        "observed": "",
+        "status": "OK"
+      },
+      {
+        "no": 14,
+        "desc": "Motor Length",
+        "spec": "177.8 (+/- 1.5)",
+        "method": "Height Gauge",
+        "observed": "",
+        "status": "OK"
+      },
+      {
+        "no": 15,
+        "desc": "Motor Weight",
+        "spec": "12.1 (+/- 0.15)",
+        "method": "Weight Scale",
+        "observed": "",
+        "status": "OK"
+      },
+      {
+        "no": 16,
+        "desc": "Phase Cable Grommet",
+        "spec": "Manual Assembly",
+        "method": "Visual",
+        "observed": "",
+        "status": "OK"
+      },
+      {
+        "no": 17,
+        "desc": "Terminal Cover",
+        "spec": "Manual Assembly",
+        "method": "Visual",
+        "observed": "",
+        "status": "OK"
+      },
+      {
+        "no": 18,
+        "desc": "Terminal Cover Assembly Bolts",
+        "spec": "Manual Assembly",
+        "method": "Visual",
+        "observed": "",
+        "status": "OK"
+      },
+      {
+        "no": 19,
+        "desc": "Phase Cable Assembly Bolts",
+        "spec": "Manual Assembly",
+        "method": "Visual",
+        "observed": "",
+        "status": "OK"
+      },
+      {
+        "no": 20,
+        "desc": "Visual Defects",
+        "spec": "Free From Rust, Dust, Physical Damage, Loose fitments, Missing Components ",
+        "method": "Visual",
+        "observed": "",
+        "status": "OK"
+      },
+      {
+        "no": 21,
+        "desc": "Deviations if any",
+        "spec": "—",
+        "method": "—",
+        "observed": "",
+        "status": ""
+      }
+    ],
+    "timestamp": "2026-06-24T09:48:22.188Z"
+  },
+  {
+    "id": 1782447470131,
+    "serialNo": "05Test",
+    "testDate": "2026-06-26",
+    "motorModel": "C01",
+    "motorCode": "ML2A",
+    "testedBy": "GRV",
+    "data": [
+      {
+        "no": 1,
+        "desc": "Spigot Seat",
+        "spec": "154,90 (0,00/-0,03) mm",
+        "method": "OD Snap gauge",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 2,
+        "desc": "Front Mounting Thread",
+        "spec": "3x M6x1 - 6H, l 18,00 mm",
+        "method": "Plug gauge check found OK",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 3,
+        "desc": "Shaft OD Total Runout Wrt Datum B",
+        "spec": "0,1 mm",
+        "method": "Total Indicator Reading",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 4,
+        "desc": "Shaft Front Face to Front Mount Spigot Seating Distance",
+        "spec": "28,20 ± 0,50 mm",
+        "method": "Height Gauge",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 5,
+        "desc": "Shaft Spline",
+        "spec": "As per Drawing",
+        "method": "Master Spline",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 6,
+        "desc": "Dry Leak Test",
+        "spec": "at Min. 0,2 bar",
+        "method": "Pressurised air and foam water",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 7,
+        "desc": "Thermister Fuction",
+        "spec": "Resistance at room temperature",
+        "method": "Resistance meter",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 8,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 1 - Red (Vdd (+5V))",
+        "method": "Visual",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 9,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 2 - White (PT 1000 +ve)",
+        "method": "Visual",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 10,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 3 - Yellow (Sin output)",
+        "method": "Visual",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 11,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 4 - Blue (Cos output)",
+        "method": "Visual",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 12,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 5 - Black (Common GND)",
+        "method": "Visual",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 13,
+        "desc": "Sensor Cable Color Sequence",
+        "spec": "Pin 6 - Green (Shield + Wire)",
+        "method": "Visual",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 14,
+        "desc": "Motor Length",
+        "spec": "177,8 (+/- 1,5)",
+        "method": "Height Gauge",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 15,
+        "desc": "Motor Weight",
+        "spec": "14,7 (+/- 0,15)",
+        "method": "Weight Scale",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 16,
+        "desc": "Phase Cable Grommet",
+        "spec": "Manual Assembly",
+        "method": "Visual",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 17,
+        "desc": "Terminal Cover",
+        "spec": "Manual Assembly",
+        "method": "Visual",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 18,
+        "desc": "Terminal Cover Assembly Bolts",
+        "spec": "Manual Assembly",
+        "method": "Visual",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 19,
+        "desc": "Phase Cable Assembly Bolts",
+        "spec": "Manual Assembly",
+        "method": "Visual",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 20,
+        "desc": "Visual Defects",
+        "spec": "Free From Rust, Dust, Physical Damage",
+        "method": "Visual",
+        "observed": "",
+        "status": ""
+      },
+      {
+        "no": 21,
+        "desc": "Deviations if any",
+        "spec": "Connector Push mount not provided, push mount cable tie provided as alternative",
+        "method": "—",
+        "observed": "Connector push mount not provided, push mount cable tie provided as alternative",
+        "status": ""
+      }
+    ],
+    "timestamp": "2026-06-26T04:17:50.128Z"
+  }
+]

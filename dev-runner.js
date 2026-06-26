@@ -20,7 +20,7 @@ for (const interfaceName in networkInterfaces) {
 }
 
 console.log(`\n🚀 Network Access Enabled!`);
-console.log(`🔗 To access from another PC, use: http://${localIp}:5174\n`);
+console.log(`🔗 To access from another PC, use: https://${localIp}:5174\n`);
 
 const { result } = concurrently(
     [

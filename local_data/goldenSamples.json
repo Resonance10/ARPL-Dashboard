@@ -1,17 +1,17 @@
 [
   {
-    "id": 1781495306724,
-    "motorCode": "P1",
-    "motorModel": "M1",
+    "id": 1781339543322,
+    "motorCode": "ML2A",
+    "motorModel": "C01",
     "nominalVoltage": 51,
-    "peakPower": 6.4,
-    "peakTorque": 45.6,
+    "peakPower": 6,
+    "peakTorque": 45,
     "peakCurrentAC": 240,
     "maxSpeed": 7200,
     "bemfAt3000": 28.5,
-    "resistance": 10,
+    "resistance": 15.3,
     "hipotLimit": 3.5,
-    "irLimit": 15.3,
+    "irLimit": 20,
     "encoder": {
       "sineMin": 1150,
       "sineMax": 2900,
@@ -21,30 +21,71 @@
       "cosPP": 1750,
       "offset": 766
     },
+    "torqueCurve": {
+      "500": 45.57,
+      "1000": 45.37,
+      "3000": 20.06,
+      "7000": 7.37
+    },
+    "powerCurve": {
+      "500": 2.39,
+      "1000": 4.75,
+      "3000": 6.3,
+      "7000": 5.4
+    },
+    "groupEff": {
+      "500": 51.5,
+      "1000": 65.87,
+      "3000": 86.51,
+      "7000": 85.67
+    }
+  },
+  {
+    "id": 1782361361105,
+    "motorCode": "ML2A05-C05",
+    "motorModel": "ML2B",
+    "nominalVoltage": 51,
+    "peakPower": 10,
+    "peakTorque": 10,
+    "peakCurrentAC": 10,
+    "maxSpeed": 101,
+    "bemfAt3000": 10,
+    "resistance": 10,
+    "hipotLimit": 10,
+    "irLimit": 10,
+    "encoder": {
+      "sineMin": 0,
+      "sineMax": 10,
+      "cosMin": 10,
+      "cosMax": 10,
+      "sinePP": 10,
+      "cosPP": 10,
+      "offset": 10
+    },
     "performanceCurves": [
       {
-        "rpm": 500,
-        "torque": 10,
-        "power": 10,
-        "efficiency": 10
-      },
-      {
-        "rpm": 1,
-        "torque": 10,
-        "power": 10,
-        "efficiency": 10
-      },
-      {
         "rpm": 10,
-        "torque": 10,
-        "power": 10,
-        "efficiency": 10
+        "torque": 20,
+        "power": 20,
+        "efficiency": 20
       },
       {
-        "rpm": 1,
-        "torque": 10,
-        "power": 10,
-        "efficiency": 10
+        "rpm": 1000,
+        "torque": 30,
+        "power": 30,
+        "efficiency": 30
+      },
+      {
+        "rpm": 3000,
+        "torque": 40,
+        "power": 40,
+        "efficiency": 40
+      },
+      {
+        "rpm": 7000,
+        "torque": 50,
+        "power": 50,
+        "efficiency": 50
       }
     ]
   }

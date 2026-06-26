@@ -232,7 +232,7 @@ const PurchaseOrder = ({
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      try { setUploadProgress(1); const fileName = await uploadFile(file); setPoRequestForm({ ...poRequestForm, fileName }); setTimeout(() => setUploadProgress(0), 1500); }
+      try { setUploadProgress(1); const fileName = await uploadFile(file); setPoRequestForm(prev => ({ ...prev, fileName })); setTimeout(() => setUploadProgress(0), 1500); }
       catch (error) { console.error("Upload failed", error); setUploadProgress(0); showToast("Failed to upload quotation.", "error"); }
     }
   };
@@ -255,8 +255,8 @@ const PurchaseOrder = ({
       const historyEntry = { date: new Date().toISOString(), user: loginForm.username, role: userRoles.join(', '), action: 'Request Submitted', remarks: poRequestForm.remarks || 'Initial submission' };
       const newRequest = { ...submitData, id: Date.now(), refId: generateRefId(poRequestForm.type, poRequests), status: 'Pending Owner', createdAt: new Date().toISOString(), requestedBy: loginForm.username, remarks: '', poFile: null, history: [historyEntry] };
       updated = [newRequest, ...poRequests];
-      addNotification(poRequestForm.programOwner, `New PO Request from ${loginForm.username}: ${poRequestForm.title}`, newRequest.id);
-      addNotification('Program Head', `New PO Request from ${loginForm.username} (Requires Owner Approval): ${poRequestForm.title}`, newRequest.id);
+      addNotification(poRequestForm.programOwner, `New PO Request from ${loginForm.username}: ${poRequestForm.title}`, newRequest.id, 'po');
+      addNotification('Program Head', `New PO Request from ${loginForm.username} (Requires Owner Approval): ${poRequestForm.title}`, newRequest.id, 'po');
     }
     setPoRequests(updated);
     syncToDisk({ key: 'poRequests', data: updated });
@@ -273,7 +273,7 @@ const PurchaseOrder = ({
 
   const addPOItemRow = () => setPoRequestForm(prev => ({ ...prev, items: [...prev.items, { partDrawing: '', partName: '', unit: 'Nos.', qty: '', unitPrice: '', currency: 'INR' }] }));
   const removePOItemRow = (index) => { if (poRequestForm.items.length <= 1) return; setPoRequestForm(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== index) })); };
-  const updatePOItem = (index, field, value) => { const updated = [...poRequestForm.items]; updated[index][field] = value; setPoRequestForm(prev => ({ ...prev, items: updated })); };
+  const updatePOItem = (index, field, value) => { setPoRequestForm(prev => ({ ...prev, items: prev.items.map((item, i) => i === index ? { ...item, [field]: value } : item) })); };
 
   const handleEditOwnRequest = (req) => {
     setPoRequestForm({
@@ -293,7 +293,7 @@ const PurchaseOrder = ({
     if (req.status === 'Pending Owner') targetUser = req.programOwner;
     else if (req.status === 'Pending Admin') targetUser = req.programAdmin;
     else if (req.status === 'Pending Head') targetUser = 'Program Head';
-    if (targetUser) { addNotification(targetUser, `Follow-up request for "${req.title}" from ${loginForm.username}`, req.id); showToast(`Follow-up notification sent to ${targetUser}`); }
+    if (targetUser) { addNotification(targetUser, `Follow-up request for "${req.title}" from ${loginForm.username}`, req.id, 'po'); showToast(`Follow-up notification sent to ${targetUser}`); }
     else showToast("No pending approver found.", "error");
   };
 
@@ -302,7 +302,7 @@ const PurchaseOrder = ({
       const updated = poRequests.map(r => r.id === requestId ? { ...r, status: 'Cancelled' } : r);
       setPoRequests(updated); syncToDisk({ key: 'poRequests', data: updated });
       const req = poRequests.find(r => r.id === requestId);
-      if (req) addNotification(req.programOwner, `User cancelled request: ${req.title}`, requestId);
+      if (req) addNotification(req.programOwner, `User cancelled request: ${req.title}`, requestId, 'po');
     }
   };
 
@@ -333,7 +333,7 @@ const PurchaseOrder = ({
     const historyEntry = { date: new Date().toISOString(), user: loginForm.username, role: userRoles.join(', '), action: 'Request Reassigned', reassignedTo: targetUser.username, reassignedRole: (targetUser.roles || []).join(', '), remarks: `Approval reassigned to ${targetUser.username} (${(targetUser.roles || []).join(', ')})` };
     const updated = poRequests.map(r => r.id === requestId ? { ...r, [fieldToUpdate]: newUser, isReassigned: true, reassignedTo: targetUser.username, reassignedRole: (targetUser.roles || []).join(', '), history: [...(r.history || []), historyEntry] } : r);
     setPoRequests(updated); syncToDisk({ key: 'poRequests', data: updated });
-    addNotification(newUser, `A request "${request.title}" has been reassigned to you for approval.`, requestId);
+    addNotification(newUser, `A request "${request.title}" has been reassigned to you for approval.`, requestId, 'po');
     setReviewingRequest(null); setIsReassigning(false); setTargetReassignUser('');
     showToast(`Request reassigned to ${targetUser.username}.`);
   };
@@ -1031,7 +1031,7 @@ const PurchaseOrder = ({
                     </div></td>
                   </tr>
                 ))}
-                {filteredReportData.length === 0 && <tr><td colSpan="6" className="empty-msg">No records found for selected filters.</td></tr>}
+                {filteredReportData.length === 0 && <tr><td colSpan="7" className="empty-msg">No records found for selected filters.</td></tr>}
               </tbody>
             </table>
           </div>

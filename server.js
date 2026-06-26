@@ -10,7 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = 5001;
 
-app.use(cors());
+app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:5174', 'http://127.0.0.1:3000', 'https://localhost:5173', 'https://localhost:5174', 'https://127.0.0.1:5173', 'https://127.0.0.1:5174'] }));
 app.use(express.json({ limit: '50mb' }));
 
 // ─── Directories ────────────────────────────────────────────────────────────
@@ -32,12 +32,25 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-const readJson = (file) => {
+const fileLocks = new Map();
+const lockFile = async (file) => {
+    while (fileLocks.get(file)) {
+        await new Promise(r => setTimeout(r, 10));
+    }
+    fileLocks.set(file, true);
+};
+const unlockFile = (file) => { fileLocks.delete(file); };
+
+const readJson = (file, defaultVal = {}) => {
     try {
-        if (!fs.existsSync(file)) return {};
+        if (!fs.existsSync(file)) return defaultVal;
         const content = fs.readFileSync(file, 'utf8').trim();
-        return content ? JSON.parse(content) : {};
-    } catch { return {}; }
+        if (!content) return defaultVal;
+        const parsed = JSON.parse(content);
+        // If default is an array but parsed is not, return default to prevent .push() crashes
+        if (Array.isArray(defaultVal) && !Array.isArray(parsed)) return defaultVal;
+        return parsed;
+    } catch { return defaultVal; }
 };
 
 const writeJson = (file, data) => {
@@ -111,21 +124,15 @@ const migrateFromDbJson = () => {
 
 migrateFromDbJson();
 
-// Serve uploaded files from legacy and new directories
-const LEGACY_UPLOADS = path.join(__dirname, 'uploads');
+// Serve uploaded files
 app.use('/uploads', (req, res, next) => {
     const filePath = decodeURIComponent(req.path);
-    // First try legacy uploads directory
-    if (fs.existsSync(LEGACY_UPLOADS)) {
-        const legacyPath = path.join(LEGACY_UPLOADS, filePath);
-        if (fs.existsSync(legacyPath) && fs.statSync(legacyPath).isFile()) {
-            return res.sendFile(legacyPath);
-        }
+    const fullPath = path.resolve(path.join(UPLOADS_DIR, filePath));
+    if (!fullPath.startsWith(path.resolve(UPLOADS_DIR))) {
+        return res.status(403).json({ error: 'Access denied' });
     }
-    // Then try new uploads directory
-    const newPath = path.join(UPLOADS_DIR, filePath);
-    if (fs.existsSync(newPath) && fs.statSync(newPath).isFile()) {
-        return res.sendFile(newPath);
+    if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
+        return res.sendFile(fullPath);
     }
     res.status(404).json({ error: 'File not found' });
 });
@@ -160,14 +167,30 @@ app.post('/api/save', (req, res) => {
         const data = readJson(MAIN_DATA_FILE);
         const body = req.body;
 
+        const mergeByKey = (existing, incoming) => {
+            if (!Array.isArray(existing) || !Array.isArray(incoming)) return incoming;
+            const map = new Map();
+            // Index existing items by ID (items without IDs get numeric temp keys)
+            let tempIdx = 0;
+            existing.forEach(item => {
+                if (item && item.id != null) map.set(`id_${item.id}`, item);
+                else map.set(`temp_${tempIdx++}`, item);
+            });
+            // Merge incoming items (update existing or add new)
+            incoming.forEach(item => {
+                if (item && item.id != null) map.set(`id_${item.id}`, item);
+                else map.set(`temp_${tempIdx++}`, item);
+            });
+            return [...map.values()];
+        };
+
         if (body.key && body.data !== undefined) {
-            // Format: { key: "programs", data: [...] }
-            data[body.key] = body.data;
+            const existing = data[body.key];
+            data[body.key] = mergeByKey(existing, body.data);
         } else {
-            // Format: { programs: [...], workOrders: [...] } (merge top-level keys)
             for (const key of Object.keys(body)) {
                 if (key !== 'updatedAt' && key !== 'source') {
-                    data[key] = body[key];
+                    data[key] = mergeByKey(data[key], body[key]);
                 }
             }
         }
@@ -220,7 +243,7 @@ app.post('/api/notify', (req, res) => {
         }
         res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Failed to send notification' });
     }
 });
 
@@ -228,120 +251,160 @@ app.post('/api/notify', (req, res) => {
 // GOLDEN SAMPLES ENDPOINTS
 // ============================================================================
 
-app.get('/api/golden-samples', (req, res) => res.json(readJson(GOLDEN_FILE)));
+app.get('/api/golden-samples', (req, res) => res.json(readJson(GOLDEN_FILE, [])));
 
 app.post('/api/golden-samples', (req, res) => {
-    const items = readJson(GOLDEN_FILE);
-    const newItem = { id: Date.now(), ...req.body };
-    items.push(newItem);
-    writeJson(GOLDEN_FILE, items);
-    res.status(201).json(newItem);
+    try {
+        const items = readJson(GOLDEN_FILE, []);
+        const newItem = { id: Date.now(), ...req.body };
+        items.push(newItem);
+        writeJson(GOLDEN_FILE, items);
+        res.status(201).json(newItem);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to save golden sample' });
+    }
 });
 
 app.put('/api/golden-samples/:id', (req, res) => {
-    const items = readJson(GOLDEN_FILE);
-    const id = parseInt(req.params.id, 10);
-    const idx = items.findIndex(item => item.id === id);
-    if (idx !== -1) {
-        items[idx] = { ...items[idx], ...req.body, id };
-        writeJson(GOLDEN_FILE, items);
-        return res.json(items[idx]);
+    try {
+        const items = readJson(GOLDEN_FILE, []);
+        const id = parseInt(req.params.id, 10);
+        const idx = items.findIndex(item => item.id === id);
+        if (idx !== -1) {
+            items[idx] = { ...items[idx], ...req.body, id };
+            writeJson(GOLDEN_FILE, items);
+            return res.json(items[idx]);
+        }
+        res.status(404).json({ message: 'Golden sample not found' });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to update golden sample' });
     }
-    res.status(404).json({ message: 'Golden sample not found' });
 });
 
 app.delete('/api/golden-samples/:id', (req, res) => {
-    let items = readJson(GOLDEN_FILE);
-    const id = parseInt(req.params.id, 10);
-    items = items.filter(item => item.id !== id);
-    writeJson(GOLDEN_FILE, items);
-    res.json({ ok: true });
+    try {
+        let items = readJson(GOLDEN_FILE, []);
+        const id = parseInt(req.params.id, 10);
+        items = items.filter(item => item.id !== id);
+        writeJson(GOLDEN_FILE, items);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to delete golden sample' });
+    }
 });
 
 // ============================================================================
 // QI/PDI REFERENCES ENDPOINTS
 // ============================================================================
 
-app.get('/api/qi-pdi-ref', (req, res) => res.json(readJson(QI_REF_FILE)));
+app.get('/api/qi-pdi-ref', (req, res) => res.json(readJson(QI_REF_FILE, [])));
 
 app.post('/api/qi-pdi-ref', (req, res) => {
-    const items = readJson(QI_REF_FILE);
-    const newItem = { id: Date.now(), ...req.body };
-    items.push(newItem);
-    writeJson(QI_REF_FILE, items);
-    res.status(201).json(newItem);
+    try {
+        const items = readJson(QI_REF_FILE, []);
+        const newItem = { id: Date.now(), ...req.body };
+        items.push(newItem);
+        writeJson(QI_REF_FILE, items);
+        res.status(201).json(newItem);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to save QI/PDI reference' });
+    }
 });
 
 app.put('/api/qi-pdi-ref/:id', (req, res) => {
-    const items = readJson(QI_REF_FILE);
-    const id = parseInt(req.params.id, 10);
-    const idx = items.findIndex(item => item.id === id);
-    if (idx !== -1) {
-        items[idx] = { ...items[idx], ...req.body, id };
-        writeJson(QI_REF_FILE, items);
-        return res.json(items[idx]);
+    try {
+        const items = readJson(QI_REF_FILE, []);
+        const id = parseInt(req.params.id, 10);
+        const idx = items.findIndex(item => item.id === id);
+        if (idx !== -1) {
+            items[idx] = { ...items[idx], ...req.body, id };
+            writeJson(QI_REF_FILE, items);
+            return res.json(items[idx]);
+        }
+        res.status(404).json({ message: 'QI/PDI reference not found' });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to update QI/PDI reference' });
     }
-    res.status(404).json({ message: 'QI/PDI reference not found' });
 });
 
 app.delete('/api/qi-pdi-ref/:id', (req, res) => {
-    let items = readJson(QI_REF_FILE);
-    const id = parseInt(req.params.id, 10);
-    items = items.filter(item => item.id !== id);
-    writeJson(QI_REF_FILE, items);
-    res.json({ ok: true });
+    try {
+        let items = readJson(QI_REF_FILE, []);
+        const id = parseInt(req.params.id, 10);
+        items = items.filter(item => item.id !== id);
+        writeJson(QI_REF_FILE, items);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to delete QI/PDI reference' });
+    }
 });
 
 // ============================================================================
 // QI/PDI REPORTS ENDPOINTS
 // ============================================================================
 
-app.get('/api/qi-pdi-reports', (req, res) => res.json(readJson(QI_REPORTS_FILE)));
+app.get('/api/qi-pdi-reports', (req, res) => res.json(readJson(QI_REPORTS_FILE, [])));
 
 app.post('/api/qi-pdi-reports', (req, res) => {
-    const items = readJson(QI_REPORTS_FILE);
-    const newItem = { id: Date.now(), ...req.body };
-    items.push(newItem);
-    writeJson(QI_REPORTS_FILE, items);
-    res.status(201).json(newItem);
+    try {
+        const items = readJson(QI_REPORTS_FILE, []);
+        const newItem = { id: Date.now(), ...req.body };
+        items.push(newItem);
+        writeJson(QI_REPORTS_FILE, items);
+        res.status(201).json(newItem);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to save QI/PDI report' });
+    }
 });
 
 app.put('/api/qi-pdi-reports/:id', (req, res) => {
-    const items = readJson(QI_REPORTS_FILE);
-    const id = parseInt(req.params.id, 10);
-    const idx = items.findIndex(item => item.id === id);
-    if (idx !== -1) {
-        items[idx] = { ...items[idx], ...req.body, id };
-        writeJson(QI_REPORTS_FILE, items);
-        return res.json(items[idx]);
+    try {
+        const items = readJson(QI_REPORTS_FILE, []);
+        const id = parseInt(req.params.id, 10);
+        const idx = items.findIndex(item => item.id === id);
+        if (idx !== -1) {
+            items[idx] = { ...items[idx], ...req.body, id };
+            writeJson(QI_REPORTS_FILE, items);
+            return res.json(items[idx]);
+        }
+        res.status(404).json({ message: 'QI/PDI report not found' });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to update QI/PDI report' });
     }
-    res.status(404).json({ message: 'QI/PDI report not found' });
 });
 
 // ============================================================================
 // MOTORS ENDPOINTS
 // ============================================================================
 
-app.get('/api/motors', (req, res) => res.json(readJson(MOTORS_FILE)));
+app.get('/api/motors', (req, res) => res.json(readJson(MOTORS_FILE, [])));
 
 app.post('/api/motors', (req, res) => {
-    const items = readJson(MOTORS_FILE);
-    const newItem = { id: Date.now(), ...req.body };
-    items.push(newItem);
-    writeJson(MOTORS_FILE, items);
-    res.status(201).json(newItem);
+    try {
+        const items = readJson(MOTORS_FILE, []);
+        const newItem = { id: Date.now(), ...req.body };
+        items.push(newItem);
+        writeJson(MOTORS_FILE, items);
+        res.status(201).json(newItem);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to save motor' });
+    }
 });
 
 app.put('/api/motors/:id', (req, res) => {
-    const items = readJson(MOTORS_FILE);
-    const id = parseInt(req.params.id, 10);
-    const idx = items.findIndex(item => item.id === id);
-    if (idx !== -1) {
-        items[idx] = { ...items[idx], ...req.body, id };
-        writeJson(MOTORS_FILE, items);
-        return res.json(items[idx]);
+    try {
+        const items = readJson(MOTORS_FILE, []);
+        const id = parseInt(req.params.id, 10);
+        const idx = items.findIndex(item => item.id === id);
+        if (idx !== -1) {
+            items[idx] = { ...items[idx], ...req.body, id };
+            writeJson(MOTORS_FILE, items);
+            return res.json(items[idx]);
+        }
+        res.status(404).json({ message: 'Motor not found' });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to update motor' });
     }
-    res.status(404).json({ message: 'Motor not found' });
 });
 
 // ============================================================================
@@ -379,7 +442,7 @@ app.post('/api/reports', eolUpload.fields([
             timestamp: new Date().toISOString()
         };
 
-        const reports = readJson(DATA_FILE);
+        const reports = readJson(DATA_FILE, []);
         reports.push(newReport);
         writeJson(DATA_FILE, reports);
 
@@ -391,7 +454,7 @@ app.post('/api/reports', eolUpload.fields([
 
 app.get('/api/reports', (req, res) => {
     try {
-        const reports = readJson(DATA_FILE);
+        const reports = readJson(DATA_FILE, []);
         const clean = reports.map(({ files, ...rest }) => rest);
         res.json({ ok: true, data: clean });
     } catch {
@@ -401,7 +464,7 @@ app.get('/api/reports', (req, res) => {
 
 app.get('/api/reports/:id', (req, res) => {
     try {
-        const reports = readJson(DATA_FILE);
+        const reports = readJson(DATA_FILE, []);
         const report = reports.find(r => r.id === parseInt(req.params.id, 10));
         if (!report) return res.status(404).json({ ok: false, error: 'Report not found' });
         const { files, ...rest } = report;

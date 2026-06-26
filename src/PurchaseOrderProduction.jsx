@@ -196,7 +196,7 @@ const PurchaseOrderProduction = ({ programs = [], workOrders = [], registeredUse
     const updated = [newRequest, ...poRequests];
     setPoRequests(updated);
     syncToDisk({ key: 'poRequests', data: updated });
-    addNotification(formData.productionHead, `New Production Request: ${formData.title}`, newRequest.id);
+    addNotification(formData.productionHead, `New Production Request: ${formData.title}`, newRequest.id, 'po_production');
     showToast("Purchase Request submitted for Production Head approval.");
     setActiveTab('my_request');
   };
@@ -215,12 +215,16 @@ const PurchaseOrderProduction = ({ programs = [], workOrders = [], registeredUse
           }
         };
         xhr.onload = () => {
-          const fileName = JSON.parse(xhr.responseText).fileName;
-          setFormData({ ...formData, fileName });
-          showToast("BOM file uploaded successfully.");
+          try {
+            const resp = JSON.parse(xhr.responseText);
+            setFormData(prev => ({ ...prev, fileName: resp.fileName }));
+            showToast("BOM file uploaded successfully.");
+          } catch (err) {
+            showToast("Upload completed but response was invalid.", "error");
+          }
           setTimeout(() => setUploadProgress(0), 1500);
         };
-        xhr.onerror = () => { throw new Error('Upload failed'); };
+        xhr.onerror = () => { setUploadProgress(0); showToast("Upload failed.", "error"); };
         const fd = new FormData();
         fd.append('file', file);
         xhr.send(fd);
@@ -239,15 +243,18 @@ const PurchaseOrderProduction = ({ programs = [], workOrders = [], registeredUse
       const xhr = new XMLHttpRequest();
       xhr.open('POST', `${API_BASE_URL}/api/upload`);
       xhr.onload = () => {
-        const fileName = JSON.parse(xhr.responseText).fileName;
-        updatePoRow(index, 'poFile', fileName);
-        showToast("PO file uploaded successfully.");
+        try {
+          const resp = JSON.parse(xhr.responseText);
+          updatePoRow(index, 'poFile', resp.fileName);
+          showToast("PO file uploaded successfully.");
+        } catch (err) {
+          showToast("Upload completed but response was invalid.", "error");
+        }
       };
-      xhr.onerror = () => { throw new Error('Upload failed'); };
+      xhr.onerror = () => { showToast("Failed to upload PO document.", "error"); };
       const fd = new FormData();
       fd.append('file', file);
       xhr.send(fd);
-      // eslint-disable-next-line no-unused-vars
     } catch (error) {
       showToast("Failed to upload PO document.", "error");
     }
@@ -268,9 +275,7 @@ const PurchaseOrderProduction = ({ programs = [], workOrders = [], registeredUse
   };
 
   const updatePoRow = (index, field, value) => {
-    const updated = [...poForm.poDetails];
-    updated[index][field] = value;
-    setPoForm(prev => ({ ...prev, poDetails: updated }));
+    setPoForm(prev => ({ ...prev, poDetails: prev.poDetails.map((item, i) => i === index ? { ...item, [field]: value } : item) }));
   };
 
   const handleCreatePOs = () => {
@@ -382,7 +387,7 @@ const PurchaseOrderProduction = ({ programs = [], workOrders = [], registeredUse
 
     setPoRequests(updated);
     syncToDisk({ key: 'poRequests', data: updated });
-    addNotification(targetReassignUser, `A production request "${viewingRequest.title}" has been reassigned to you for approval.`, viewingRequest.id);
+    addNotification(targetReassignUser, `A production request "${viewingRequest.title}" has been reassigned to you for approval.`, viewingRequest.id, 'po_production');
     setViewingRequest(null);
     setIsReassigning(false);
     setTargetReassignUser('');
